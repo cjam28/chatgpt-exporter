@@ -43,5 +43,8 @@
   "(no project)": "(нет проекта)",
   "Export All Limit": "Лимит экспорта всех",
   "Export All Limit Description": "Установите максимальное количество бесед для загрузки в диалоге 'Экспортировать все'.",
-  "Select a source to load conversations": "Выберите проект выше, чтобы загрузить беседы."
+  "Select a source to load conversations": "Выберите проект выше, чтобы загрузить беседы.",
+  "Search": "Поиск",
+  "Last 100": "Последние 100",
+  "No results": "Нет результатов"
 }

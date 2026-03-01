@@ -43,5 +43,8 @@
   "(no project)": "(tidak ada proyek)",
   "Export All Limit": "Batas Ekspor Semua",
   "Export All Limit Description": "Atur jumlah maksimum percakapan yang akan dimuat dalam dialog 'Ekspor Semua'.",
-  "Select a source to load conversations": "Pilih proyek di atas untuk memuat percakapan."
+  "Select a source to load conversations": "Pilih proyek di atas untuk memuat percakapan.",
+  "Search": "Cari",
+  "Last 100": "100 Terakhir",
+  "No results": "Tidak ada hasil"
 }

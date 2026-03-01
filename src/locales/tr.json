@@ -43,5 +43,8 @@
   "(no project)": "(proje yok)",
   "Export All Limit": "Tümünü Dışa Aktarma Limiti",
   "Export All Limit Description": "'Tümünü Dışa Aktar' iletişim kutusunda yüklenecek maksimum konuşma sayısını ayarlayın.",
-  "Select a source to load conversations": "Konuşmaları yüklemek için yukarıdan bir proje seçin."
+  "Select a source to load conversations": "Konuşmaları yüklemek için yukarıdan bir proje seçin.",
+  "Search": "Ara",
+  "Last 100": "Son 100",
+  "No results": "Sonuç yok"
 }

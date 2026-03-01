@@ -50,6 +50,8 @@ const ProjectSelect: FC<ProjectSelectProps> = ({ projects, selected, setSelected
     )
 }
 
+const EXPORT_LIMIT = 100
+
 interface ConversationSelectProps {
     conversations: ApiConversationItem[]
     selected: ApiConversationItem[]
@@ -68,43 +70,80 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     error,
 }) => {
     const { t } = useTranslation()
+    const [query, setQuery] = useState('')
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase()
+        if (!q) return conversations
+        return conversations.filter(c => c.title.toLowerCase().includes(q))
+    }, [conversations, query])
+
+    const atCap = selected.length >= EXPORT_LIMIT
+    const allFilteredSelected = filtered.length > 0
+        && filtered.slice(0, EXPORT_LIMIT).every(c => selected.some(x => x.id === c.id))
 
     return (
         <>
+            <input
+                type="search"
+                className="SelectSearch"
+                placeholder={t('Search')}
+                value={query}
+                onInput={e => setQuery(e.currentTarget.value)}
+            />
             <div className="SelectToolbar">
                 <CheckBox
                     label={t('Select All')}
                     disabled={disabled}
-                    checked={selected.length === conversations.length}
+                    checked={allFilteredSelected}
                     onCheckedChange={(checked) => {
-                        setSelected(checked ? conversations : [])
+                        setSelected(checked ? filtered.slice(0, EXPORT_LIMIT) : [])
                     }}
                 />
-                {loading && conversations.length > 0 && (
-                    <span className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                        <IconLoading className="w-3 h-3" />
-                        {t('Loading')}... ({conversations.length})
+                <div className="flex items-center gap-2 ml-auto">
+                    {loading && conversations.length > 0 && (
+                        <span className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                            <IconLoading className="w-3 h-3" />
+                            {t('Loading')}... ({conversations.length})
+                        </span>
+                    )}
+                    <button
+                        className="Button neutral"
+                        disabled={disabled || conversations.length === 0}
+                        onClick={() => setSelected(conversations.slice(0, EXPORT_LIMIT))}
+                    >
+                        {t('Last 100')}
+                    </button>
+                    <span className={`text-sm font-medium tabular-nums ${atCap ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                        {selected.length}/{EXPORT_LIMIT}
                     </span>
-                )}
+                </div>
             </div>
             <ul className="SelectList">
                 {loading && conversations.length === 0 && <li className="SelectItem">{t('Loading')}...</li>}
                 {error && <li className="SelectItem">{t('Error')}: {error}</li>}
-                {conversations.map(c => (
-                    <li className="SelectItem" key={c.id}>
-                        <CheckBox
-                            label={c.title}
-                            disabled={disabled}
-                            checked={selected.some(x => x.id === c.id)}
-                            onCheckedChange={(checked) => {
-                                setSelected(checked
-                                    ? [...selected, c]
-                                    : selected.filter(x => x.id !== c.id),
-                                )
-                            }}
-                        />
-                    </li>
-                ))}
+                {filtered.map((c) => {
+                    const isSelected = selected.some(x => x.id === c.id)
+                    return (
+                        <li className="SelectItem" key={c.id}>
+                            <CheckBox
+                                label={c.title}
+                                disabled={disabled || (atCap && !isSelected)}
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                    if (checked && atCap) return
+                                    setSelected(checked
+                                        ? [...selected, c]
+                                        : selected.filter(x => x.id !== c.id),
+                                    )
+                                }}
+                            />
+                        </li>
+                    )
+                })}
+                {!loading && !error && filtered.length === 0 && conversations.length > 0 && (
+                    <li className="SelectItem text-gray-400 dark:text-gray-500">{t('No results')}</li>
+                )}
             </ul>
         </>
     )
@@ -353,6 +392,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                     )
                 : (
                     <ConversationSelect
+                        key={selectedProject?.id ?? 'no-project'}
                         conversations={conversations}
                         selected={selected}
                         setSelected={setSelected}

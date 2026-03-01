@@ -43,5 +43,8 @@
   "(no project)": "(no project)",
   "Export All Limit": "Export All Limit",
   "Export All Limit Description": "Set the maximum number of conversations to load in the 'Export All' dialog.",
-  "Select a source to load conversations": "Select a project above to load conversations."
+  "Select a source to load conversations": "Select a project above to load conversations.",
+  "Search": "Search",
+  "Last 100": "Last 100",
+  "No results": "No results"
 }

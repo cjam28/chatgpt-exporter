@@ -66,8 +66,26 @@
     background-color: #f9d9d9;
     color: #a71d2a;
 }
+.Button.neutral {
+    background-color: transparent;
+    color: #6f6e77;
+    border: 1px solid #6f6e77;
+    font-size: 13px;
+    height: 26px;
+    padding: 0 8px;
+}
 .Button.green:hover {
     background-color: #ccebd7;
+}
+.Button.neutral:hover {
+    background-color: rgba(111, 110, 119, 0.1);
+}
+.dark .Button.neutral {
+    color: #a0a0a8;
+    border-color: #a0a0a8;
+}
+.dark .Button.neutral:hover {
+    background-color: rgba(160, 160, 168, 0.1);
 }
 .Button:disabled {
     opacity: 0.5;
@@ -151,11 +169,26 @@
     color: #bcbcbc;
 }
 
+.SelectSearch {
+    width: 100%;
+    padding: 8px 16px;
+    border: 1px solid #6f6e77;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    background-color: transparent;
+    color: inherit;
+    font-size: 14px;
+    outline: none;
+}
+.SelectSearch::placeholder {
+    color: #9ca3af;
+}
+
 .SelectToolbar {
     display: flex;
     align-items: center;
     padding: 12px 16px;
-    border-radius: 4px 4px 0 0;
+    border-radius: 0;
     border: 1px solid #6f6e77;
     border-bottom: none;
 }
