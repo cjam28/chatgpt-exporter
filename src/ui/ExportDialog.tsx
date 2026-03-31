@@ -15,6 +15,12 @@ import type { ApiConversationItem, ApiConversationWithId, ApiProjectInfo } from 
 import type { FC } from '../type'
 import type { ChangeEvent } from 'preact/compat'
 
+/**
+ * Module-level flag shared between ExportDialog (parent) and DialogContent (child).
+ * Lets the parent gate ESC / outside-click dismissal without lifting state.
+ */
+const exportingRef = { current: false }
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -343,6 +349,8 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     const searchInputRef = useRef<HTMLInputElement>(null)
     /** Set to true before clicking a chip-edit button to prevent blur from closing the picker */
     const skipNextBlur = useRef(false)
+    /** Offset for the "Next 100 from #N" resume control */
+    const [skipFirst, setSkipFirst] = useState(0)
 
     // ── Dynamic sub-options ──
 
@@ -795,7 +803,7 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                 )}
             </div>
 
-            {/* ── Toolbar: select-all + last-100 + counter ── */}
+            {/* ── Toolbar: select-all + last-100 + resume + counter ── */}
             <div className="SelectToolbar">
                 <CheckBox
                     label={t('Select All')}
@@ -806,7 +814,7 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                         setSelected(checked ? filtered : [])
                     }}
                 />
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2 ml-auto flex-wrap">
                     {loading && conversations.length > 0 && (
                         <span className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                             <IconLoading className="w-3 h-3" />
@@ -819,6 +827,33 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                         onClick={() => setSelected(filtered.slice(0, EXPORT_OPERATION_BATCH))}
                     >
                         {t('Last 100')}
+                    </button>
+                    {/* Resume control: select the next 100 starting at a given offset */}
+                    <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={skipFirst}
+                        title="Starting position for next batch (e.g. 200 to resume after 2 batches)"
+                        disabled={disabled || conversations.length === 0}
+                        onChange={e => setSkipFirst(Math.max(0, Math.floor(Number(e.currentTarget.value))))}
+                        style={{
+                            width: '4rem',
+                            fontSize: '0.75rem',
+                            padding: '2px 5px',
+                            border: '1px solid #9ca3af',
+                            borderRadius: '3px',
+                            background: 'transparent',
+                            color: 'inherit',
+                        }}
+                    />
+                    <button
+                        className="Button neutral"
+                        title={`Select 100 conversations starting at position #${skipFirst + 1}`}
+                        disabled={disabled || conversations.length === 0 || skipFirst >= filtered.length}
+                        onClick={() => setSelected(filtered.slice(skipFirst, skipFirst + EXPORT_OPERATION_BATCH))}
+                    >
+                        → 100
                     </button>
                     <span className="text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400">
                         {selected.length} / {filtered.length}
@@ -931,6 +966,8 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     const pendingBatchesRef = useRef<ApiConversationItem[][]>([])
     const batchIndexRef = useRef(0)
     const totalBatchesRef = useRef(0)
+    /** Incremented on each new fetch; callbacks check this to discard stale results after remount */
+    const fetchGenRef = useRef(0)
 
     const onUpload = useCallback((e: ChangeEvent<HTMLInputElement>) => {
         const file = (e.target as HTMLInputElement)?.files?.[0]
@@ -1092,19 +1129,44 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             .catch(err => console.error('Failed to fetch projects:', err))
     }, [])
 
+    // Cancel any in-flight work when the dialog unmounts to avoid stale-state errors
+    useEffect(() => {
+        const genRef = fetchGenRef
+        return () => {
+            exportingRef.current = false
+            genRef.current++
+            requestQueue.clear()
+            archiveQueue.clear()
+            deleteQueue.clear()
+        }
+    }, [requestQueue, archiveQueue, deleteQueue])
+
+    // Sync processing flag so ExportDialog can gate ESC / outside-click
+    useEffect(() => {
+        exportingRef.current = processing
+    }, [processing])
+
     // Auto-load conversations on dialog open
     useEffect(() => {
+        const gen = ++fetchGenRef.current
+        const alive = () => gen === fetchGenRef.current
         setSelected([])
         setApiConversations([])
         setHasMore(false)
         setTotalAvailable(null)
         setLoading(true)
-        fetchAllConversations(null, exportAllLimit, batch => setApiConversations(prev => [...prev, ...batch]), setHasMore)
+        fetchAllConversations(
+            null,
+            exportAllLimit,
+            (batch) => { if (alive()) setApiConversations(prev => [...prev, ...batch]) },
+            (hasMore) => { if (alive()) setHasMore(hasMore) },
+        )
             .catch((err: Error) => {
+                if (!alive()) return
                 console.error('Error fetching conversations:', err)
                 setError(err.message || 'Failed to load conversations')
             })
-            .finally(() => setLoading(false))
+            .finally(() => { if (alive()) setLoading(false) })
     }, [exportAllLimit])
 
     const loadMore = useCallback(async () => {
@@ -1225,11 +1287,24 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                     </div>
                 </>
             )}
-            <Dialog.Close asChild>
-                <button className="IconButton CloseButton" aria-label="Close">
-                    <IconCross />
-                </button>
-            </Dialog.Close>
+            {processing
+                ? (
+                    <button
+                        className="IconButton CloseButton"
+                        aria-label="Export in progress"
+                        title="Export is in progress — wait for it to finish before closing"
+                        style={{ cursor: 'not-allowed', opacity: 0.35 }}
+                    >
+                        <IconCross />
+                    </button>
+                    )
+                : (
+                    <Dialog.Close asChild>
+                        <button className="IconButton CloseButton" aria-label="Close">
+                            <IconCross />
+                        </button>
+                    </Dialog.Close>
+                    )}
         </>
     )
 }
@@ -1245,14 +1320,28 @@ interface ExportDialogProps {
 }
 
 export const ExportDialog: FC<ExportDialogProps> = ({ format, open, onOpenChange, children }) => {
+    const guardClose = (e: Event) => {
+        if (exportingRef.current) e.preventDefault()
+    }
+
     return (
-        <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Root
+            open={open}
+            onOpenChange={(val: boolean) => {
+                if (!val && exportingRef.current) return // block close while exporting
+                onOpenChange(val)
+            }}
+        >
             <Dialog.Trigger asChild>
                 {children}
             </Dialog.Trigger>
             <Dialog.Portal>
                 <Dialog.Overlay className="DialogOverlay" />
-                <Dialog.Content className="DialogContent">
+                <Dialog.Content
+                    className="DialogContent"
+                    onEscapeKeyDown={guardClose}
+                    onInteractOutside={guardClose}
+                >
                     {open && <DialogContent format={format} />}
                 </Dialog.Content>
             </Dialog.Portal>

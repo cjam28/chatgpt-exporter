@@ -22501,6 +22501,7 @@ ${content2}`;
     );
   };
   const useSettingContext = () => q$1(SettingContext);
+  const exportingRef = { current: false };
   function toMs(time) {
     if (time == null) return 0;
     if (typeof time === "number") return time * 1e3;
@@ -22723,6 +22724,7 @@ ${content2}`;
     const lastClickedIndex = _(-1);
     const searchInputRef = _(null);
     const skipNextBlur = _(false);
+    const [skipFirst, setSkipFirst] = h$4(0);
     const originSubOptions = F$1(() => {
       const map2 = /* @__PURE__ */ new Map();
       for (const c2 of conversations) {
@@ -23164,7 +23166,7 @@ ${content2}`;
             }
           }
         ),
-        /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2 ml-auto", children: [
+        /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2 ml-auto flex-wrap", children: [
           loading && conversations.length > 0 && /* @__PURE__ */ o$8("span", { className: "flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400", children: [
             /* @__PURE__ */ o$8(IconLoading, { className: "w-3 h-3" }),
             t2("Loading"),
@@ -23179,6 +23181,37 @@ ${content2}`;
               disabled: disabled || conversations.length === 0,
               onClick: () => setSelected(filtered.slice(0, EXPORT_OPERATION_BATCH)),
               children: t2("Last 100")
+            }
+          ),
+          /* @__PURE__ */ o$8(
+            "input",
+            {
+              type: "number",
+              min: "0",
+              step: "100",
+              value: skipFirst,
+              title: "Starting position for next batch (e.g. 200 to resume after 2 batches)",
+              disabled: disabled || conversations.length === 0,
+              onChange: (e2) => setSkipFirst(Math.max(0, Math.floor(Number(e2.currentTarget.value)))),
+              style: {
+                width: "4rem",
+                fontSize: "0.75rem",
+                padding: "2px 5px",
+                border: "1px solid #9ca3af",
+                borderRadius: "3px",
+                background: "transparent",
+                color: "inherit"
+              }
+            }
+          ),
+          /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "Button neutral",
+              title: `Select 100 conversations starting at position #${skipFirst + 1}`,
+              disabled: disabled || conversations.length === 0 || skipFirst >= filtered.length,
+              onClick: () => setSelected(filtered.slice(skipFirst, skipFirst + EXPORT_OPERATION_BATCH)),
+              children: "→ 100"
             }
           ),
           /* @__PURE__ */ o$8("span", { className: "text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400", children: [
@@ -23282,6 +23315,7 @@ ${content2}`;
     const pendingBatchesRef = _([]);
     const batchIndexRef = _(0);
     const totalBatchesRef = _(0);
+    const fetchGenRef = _(0);
     const onUpload = T$4((e2) => {
       var _a, _b;
       const file = (_b = (_a = e2.target) == null ? void 0 : _a.files) == null ? void 0 : _b[0];
@@ -23428,15 +23462,42 @@ ${content2}`;
       fetchProjects().then(setProjects).catch((err) => console.error("Failed to fetch projects:", err));
     }, []);
     p$6(() => {
+      const genRef = fetchGenRef;
+      return () => {
+        exportingRef.current = false;
+        genRef.current++;
+        requestQueue.clear();
+        archiveQueue.clear();
+        deleteQueue.clear();
+      };
+    }, [requestQueue, archiveQueue, deleteQueue]);
+    p$6(() => {
+      exportingRef.current = processing;
+    }, [processing]);
+    p$6(() => {
+      const gen = ++fetchGenRef.current;
+      const alive = () => gen === fetchGenRef.current;
       setSelected([]);
       setApiConversations([]);
       setHasMore(false);
       setTotalAvailable(null);
       setLoading(true);
-      fetchAllConversations(null, exportAllLimit, (batch) => setApiConversations((prev) => [...prev, ...batch]), setHasMore).catch((err) => {
+      fetchAllConversations(
+        null,
+        exportAllLimit,
+        (batch) => {
+          if (alive()) setApiConversations((prev) => [...prev, ...batch]);
+        },
+        (hasMore2) => {
+          if (alive()) setHasMore(hasMore2);
+        }
+      ).catch((err) => {
+        if (!alive()) return;
         console.error("Error fetching conversations:", err);
         setError(err.message || "Failed to load conversations");
-      }).finally(() => setLoading(false));
+      }).finally(() => {
+        if (alive()) setLoading(false);
+      });
     }, [exportAllLimit]);
     const loadMore = T$4(async () => {
       if (loadingMore) return;
@@ -23534,17 +23595,47 @@ ${content2}`;
           }
         ) })
       ] }),
-      /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f39c2d165cd861fe, { asChild: true, children: /* @__PURE__ */ o$8("button", { className: "IconButton CloseButton", "aria-label": "Close", children: /* @__PURE__ */ o$8(IconCross, {}) }) })
+      processing ? /* @__PURE__ */ o$8(
+        "button",
+        {
+          className: "IconButton CloseButton",
+          "aria-label": "Export in progress",
+          title: "Export is in progress — wait for it to finish before closing",
+          style: { cursor: "not-allowed", opacity: 0.35 },
+          children: /* @__PURE__ */ o$8(IconCross, {})
+        }
+      ) : /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f39c2d165cd861fe, { asChild: true, children: /* @__PURE__ */ o$8("button", { className: "IconButton CloseButton", "aria-label": "Close", children: /* @__PURE__ */ o$8(IconCross, {}) }) })
     ] });
   };
   const ExportDialog = ({ format, open, onOpenChange, children }) => {
-    return /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$be92b6f5f03c0fe9, { open, onOpenChange, children: [
-      /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$41fb9f06171c75f4, { asChild: true, children }),
-      /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$602eac185826482c, { children: [
-        /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$c6fdb837b070b4ff, { className: "DialogOverlay" }),
-        /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$7c6e2c02157bb7d2, { className: "DialogContent", children: open && /* @__PURE__ */ o$8(DialogContent, { format }) })
-      ] })
-    ] });
+    const guardClose = (e2) => {
+      if (exportingRef.current) e2.preventDefault();
+    };
+    return /* @__PURE__ */ o$8(
+      $5d3850c4d0b4e6c7$export$be92b6f5f03c0fe9,
+      {
+        open,
+        onOpenChange: (val) => {
+          if (!val && exportingRef.current) return;
+          onOpenChange(val);
+        },
+        children: [
+          /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$41fb9f06171c75f4, { asChild: true, children }),
+          /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$602eac185826482c, { children: [
+            /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$c6fdb837b070b4ff, { className: "DialogOverlay" }),
+            /* @__PURE__ */ o$8(
+              $5d3850c4d0b4e6c7$export$7c6e2c02157bb7d2,
+              {
+                className: "DialogContent",
+                onEscapeKeyDown: guardClose,
+                onInteractOutside: guardClose,
+                children: open && /* @__PURE__ */ o$8(DialogContent, { format })
+              }
+            )
+          ] })
+        ]
+      }
+    );
   };
   const TIMEOUT = 2500;
   const MenuItem = ({ text: text2, successText, disabled = false, title: title2, icon: Icon, onClick, className }) => {
