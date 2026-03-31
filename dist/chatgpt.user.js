@@ -22672,7 +22672,7 @@ ${content2}`;
       }
       case "project": {
         if (chip.projectIds.length === 0) break;
-        raw2 = chip.projectIds.includes(c2.gizmo_id);
+        raw2 = c2.gizmo_id != null && chip.projectIds.includes(c2.gizmo_id);
         break;
       }
       case "status": {
