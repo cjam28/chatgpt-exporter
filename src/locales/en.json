@@ -42,9 +42,16 @@
   "Select Project": "Select Project",
   "(no project)": "(no project)",
   "Export All Limit": "Export All Limit",
-  "Export All Limit Description": "Set the maximum number of conversations to load in the 'Export All' dialog.",
+  "Export All Limit Description": "Set the maximum number of conversations to load. Exports run in waves of 100 conversations to stay within API rate limits.",
   "Select a source to load conversations": "Select a project above to load conversations.",
   "Search": "Search",
   "Last 100": "Last 100",
-  "No results": "No results"
+  "No results": "No results",
+  "Date From": "From",
+  "Date To": "To",
+  "Date Filter Label": "Filter by created date",
+  "Date Filter Hint": "Filters by the chat creation date returned by the API.",
+  "Selected count": "{{count}} selected",
+  "Export batch info": "Exports in batches of 100 per download",
+  "Exporting batch": "Exporting batch {{current}} of {{total}}"
 }
