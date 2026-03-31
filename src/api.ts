@@ -301,6 +301,14 @@ export interface ApiConversationItem {
     is_temporary_chat?: boolean
     /** Non-null when the conversation belongs to a custom GPT or project */
     gizmo_id?: string | null
+    /** How the conversation was initiated, e.g. "apple" for Siri/iOS, null for web/app */
+    conversation_origin?: string | null
+    /** ISO 8601 timestamp if the conversation is pinned, null otherwise */
+    pinned_time?: string | null
+    /** True when this conversation is archived */
+    is_archived?: boolean
+    /** True when memory is disabled for this conversation */
+    is_do_not_remember?: boolean | null
 }
 
 export interface ApiConversations {

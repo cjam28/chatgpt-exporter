@@ -510,17 +510,6 @@ html {
     }
 }
 
-.SelectChip input[type="number"] {
-    width: 2.2rem;
-    background: transparent;
-    color: inherit;
-    font-size: inherit;
-    text-align: center;
-    border: none;
-    outline: none;
-    padding: 0;
-}
-
 .SelectChipRemove {
     cursor: pointer;
     opacity: 0.6;
@@ -542,7 +531,8 @@ html {
     border: 1px solid #6f6e77;
     border-radius: 0 0 6px 6px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    overflow: hidden;
+    overflow-y: auto;
+    max-height: 280px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -582,6 +572,80 @@ html {
     font-size: 0.7rem;
     color: #9ca3af;
     margin-top: 1px;
+}
+
+/* Group header inside the filter picker popover */
+.SelectFilterGroupHeader {
+    padding: 6px 14px 2px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #9ca3af;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* AND / OR logic toggle pill in the chip bar */
+.SelectChipLogic {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.SelectChipLogic:hover { background: #bae6fd; }
+.SelectChipLogicOr { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.SelectChipLogicOr:hover { background: #fde68a; }
+
+@media (prefers-color-scheme: dark) {
+    .SelectChipLogic { background: #0c4a6e; color: #7dd3fc; border-color: #075985; }
+    .SelectChipLogicOr { background: #451a03; color: #fcd34d; border-color: #78350f; }
+}
+
+/* Include / exclude mode badge inside each chip */
+.SelectChipMode {
+    font-size: 0.6rem;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(29, 78, 216, 0.1);
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.75;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.SelectChipMode:hover { opacity: 1; }
+.SelectChipModeExclude { background: rgba(220, 38, 38, 0.15); }
+
+/* Chip rendered in exclude mode */
+.SelectChipExclude {
+    background: #fee2e2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectChipExclude { background: #450a0a; color: #f87171; border-color: #7f1d1d; }
+}
+
+/* Number input inside duration / recency chips */
+.SelectChip input[type="number"] {
+    width: 2.2rem;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    text-align: center;
+    border: none;
+    outline: none;
+    padding: 0;
 }
 
 @keyframes contentShow {
@@ -1491,18 +1555,6 @@ html {
     const result = conversations.slice(0, maxConversations);
     onHasMore == null ? void 0 : onHasMore(result.length >= maxConversations);
     return result;
-  }
-  async function fetchAllConversationsAll(projects, maxConversations = 1e3, onBatch) {
-    const seen = /* @__PURE__ */ new Set();
-    const notify = (items) => {
-      const novel = items.filter((c2) => !seen.has(c2.id));
-      for (const c2 of novel) seen.add(c2.id);
-      if (novel.length > 0) onBatch == null ? void 0 : onBatch(novel);
-    };
-    await fetchAllConversations(null, maxConversations, notify);
-    for (const project of projects) {
-      await fetchAllConversations(project.id, maxConversations, notify);
-    }
   }
   async function archiveConversation(chatId) {
     const url = conversationApi(chatId);
@@ -8371,21 +8423,40 @@ html {
     "Export batches button": "Export ({{n}} downloads)",
     "Batch progress": "Batch {{current}}/{{total}}",
     "All conversations": "All conversations",
-    "Filter chip starred label": "★ Starred",
-    "Filter chip starred desc": "Only conversations you have starred",
-    "Filter chip not temp label": "💾 Saved only",
-    "Filter chip not temp desc": "Skip temporary chats not saved to history",
-    "Filter chip duration label": "⏱ Long conversation",
-    "Filter chip duration desc": "Active span ≥ 7 days (click chip to adjust)",
-    "Filter chip gpt label": "🤖 GPT / custom AI",
-    "Filter chip gpt desc": "Chats that used a custom GPT or project AI",
-    "Filter chip regular label": "💬 Regular chats",
-    "Filter chip regular desc": "Chats without a custom GPT or project",
-    "Filter chip active span": "⏱ Active ≥",
-    "Filter chip active suffix": "d",
     "Filters hint": "type # to add filters",
     "Load more conversations": "Load {{n}} more",
-    "Load more conversations remaining": "Load {{n}} more · {{remaining}} left"
+    "Load more conversations remaining": "Load {{n}} more · {{remaining}} left",
+    "Chip group chat class": "Chat class",
+    "Chip group origin": "Origin",
+    "Chip group status": "Status",
+    "Chip group duration": "Duration",
+    "Chip group recency": "Recency",
+    "Chip cc regular label": "💬 Regular",
+    "Chip cc regular desc": "Standard chats with no GPT or Project",
+    "Chip cc gpt label": "🤖 GPT",
+    "Chip cc gpt desc": "Used a GPT Store AI",
+    "Chip cc project label": "📂 Project",
+    "Chip cc project desc": "Started inside one of your Projects",
+    "Chip origin web label": "🌐 Web / App",
+    "Chip origin web desc": "Web app or mobile app",
+    "Chip status starred label": "⭐ Starred",
+    "Chip status starred desc": "Conversations you have starred",
+    "Chip status temporary label": "💬 Temporary",
+    "Chip status temporary desc": "Temporary chats not saved to history",
+    "Chip status pinned label": "📌 Pinned",
+    "Chip status pinned desc": "Conversations you have pinned",
+    "Chip duration label": "⏱ Long conversation",
+    "Chip duration desc": "Active span ≥ N days (adjustable on chip)",
+    "Chip recency label": "📅 Recently active",
+    "Chip recency desc": "Updated within N days (adjustable on chip)",
+    "Chip mode include": "include",
+    "Chip mode exclude": "exclude",
+    "Chip logic and": "AND",
+    "Chip logic or": "OR",
+    "Chip duration prefix": "⏱ active ≥",
+    "Chip duration suffix": "d",
+    "Chip recency prefix": "📅 updated <",
+    "Chip recency suffix": "d"
   };
   const title$7 = "ChatGPT Exporter";
   const ExportHelper$7 = "Exportar";
@@ -22324,69 +22395,79 @@ ${content2}`;
     if (diffDays < 365) return d2.toLocaleDateString(void 0, { month: "short", day: "numeric" });
     return d2.toLocaleDateString(void 0, { year: "numeric", month: "short", day: "numeric" });
   }
-  const ALL_PROJECTS_ID = "__all__";
-  const CHIP_OPTIONS = [
-    { id: "starred", labelKey: "Filter chip starred label", descKey: "Filter chip starred desc", make: () => ({ type: "starred" }) },
-    { id: "not_temp", labelKey: "Filter chip not temp label", descKey: "Filter chip not temp desc", make: () => ({ type: "not_temp" }) },
-    { id: "duration_gte", labelKey: "Filter chip duration label", descKey: "Filter chip duration desc", make: () => ({ type: "duration_gte", days: 7 }) },
-    { id: "has_gizmo", labelKey: "Filter chip gpt label", descKey: "Filter chip gpt desc", make: () => ({ type: "has_gizmo" }) },
-    { id: "no_gizmo", labelKey: "Filter chip regular label", descKey: "Filter chip regular desc", make: () => ({ type: "no_gizmo" }) }
-  ];
-  function applyChips(conversations, chips) {
-    return chips.reduce((result, chip) => {
-      switch (chip.type) {
-        case "starred":
-          return result.filter((c2) => c2.is_starred === true);
-        case "not_temp":
-          return result.filter((c2) => !c2.is_temporary_chat);
-        case "duration_gte":
-          return result.filter((c2) => toMs(c2.update_time) - toMs(c2.create_time) >= chip.days * 864e5);
-        case "has_gizmo":
-          return result.filter((c2) => !!c2.gizmo_id);
-        case "no_gizmo":
-          return result.filter((c2) => !c2.gizmo_id);
-        default:
-          return result;
-      }
-    }, conversations);
+  function textSearch(title2, query2) {
+    const q2 = query2.trim();
+    if (!q2) return true;
+    const lower = q2.toLowerCase();
+    if (!lower.includes("*") && !lower.includes("?")) {
+      return title2.toLowerCase().includes(lower);
+    }
+    const regexStr = lower.replace(/[\\\^$.|+()[\]{}]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+    try {
+      return new RegExp(regexStr).test(title2.toLowerCase());
+    } catch {
+      return title2.toLowerCase().includes(lower);
+    }
   }
-  const ProjectSelect = ({ projects, selected, setSelected, disabled }) => {
-    const { t: t2 } = useTranslation();
-    const value = selected === void 0 ? "__unselected__" : (selected == null ? void 0 : selected.id) || "";
-    return /* @__PURE__ */ o$8("div", { className: "flex items-center text-gray-600 dark:text-gray-300 flex justify-between mb-3", children: [
-      t2("Select Project"),
-      /* @__PURE__ */ o$8(
-        "select",
-        {
-          disabled,
-          className: "Select",
-          value,
-          onChange: (e2) => {
-            const projectId = e2.currentTarget.value;
-            if (projectId === "__unselected__") return;
-            if (projectId === ALL_PROJECTS_ID) {
-              setSelected({ id: ALL_PROJECTS_ID, organization_id: "", display: { name: t2("All conversations"), description: "" } });
-              return;
-            }
-            const project = projects.find((p2) => p2.id === projectId);
-            setSelected(project || null);
-          },
-          children: [
-            selected === void 0 && /* @__PURE__ */ o$8("option", { value: "__unselected__", disabled: true, children: [
-              t2("Select Project"),
-              "..."
-            ] }),
-            /* @__PURE__ */ o$8("option", { value: ALL_PROJECTS_ID, children: [
-              "📂 ",
-              t2("All conversations")
-            ] }),
-            /* @__PURE__ */ o$8("option", { value: "", children: t2("(no project)") }),
-            projects.map((project) => /* @__PURE__ */ o$8("option", { value: project.id, children: project.display.name }, project.id))
-          ]
+  function isChipDuplicate(chips, candidate) {
+    return chips.some((c2) => {
+      if (c2.type !== candidate.type) return false;
+      if (c2.type === "duration_gte" || c2.type === "recency_lte") return true;
+      if (c2.type === "chat_class" && candidate.type === "chat_class") return c2.value === candidate.value;
+      if (c2.type === "origin" && candidate.type === "origin") return c2.value === candidate.value;
+      if (c2.type === "status" && candidate.type === "status") return c2.value === candidate.value;
+      return false;
+    });
+  }
+  function chipDisplayLabel(chip) {
+    switch (chip.type) {
+      case "chat_class":
+        return chip.value === "regular" ? "💬 Regular" : chip.value === "gpt" ? "🤖 GPT" : "📂 Project";
+      case "origin":
+        return `🌐 ${chip.label}`;
+      case "status":
+        return chip.value === "starred" ? "⭐ Starred" : chip.value === "temporary" ? "💬 Temporary" : "📌 Pinned";
+      case "duration_gte":
+      case "recency_lte":
+        return null;
+    }
+  }
+  function applyChips(conversations, chips, logic, projects) {
+    if (chips.length === 0) return conversations;
+    const projectIdSet = new Set(projects.map((p2) => p2.id));
+    function matchSingle(c2, chip) {
+      let raw2;
+      switch (chip.type) {
+        case "chat_class": {
+          const gizmoId = c2.gizmo_id ?? null;
+          const isProject = gizmoId !== null && projectIdSet.has(gizmoId);
+          const isGpt = gizmoId !== null && !isProject;
+          if (chip.value === "regular") raw2 = gizmoId === null;
+          else if (chip.value === "project") raw2 = isProject;
+          else raw2 = isGpt;
+          break;
         }
-      )
-    ] });
-  };
+        case "origin":
+          raw2 = chip.value === null ? (c2.conversation_origin ?? null) === null : c2.conversation_origin === chip.value;
+          break;
+        case "status":
+          if (chip.value === "starred") raw2 = c2.is_starred === true;
+          else if (chip.value === "temporary") raw2 = c2.is_temporary_chat === true;
+          else raw2 = c2.pinned_time != null;
+          break;
+        case "duration_gte":
+          raw2 = toMs(c2.update_time) - toMs(c2.create_time) >= chip.days * 864e5;
+          break;
+        case "recency_lte":
+          raw2 = Date.now() - toMs(c2.update_time) <= chip.days * 864e5;
+          break;
+        default:
+          raw2 = true;
+      }
+      return chip.mode === "include" ? raw2 : !raw2;
+    }
+    return logic === "AND" ? conversations.filter((c2) => chips.every((chip) => matchSingle(c2, chip))) : conversations.filter((c2) => chips.some((chip) => matchSingle(c2, chip)));
+  }
   const DateFilter = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
     const { t: t2 } = useTranslation();
     const todayStr = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -22479,6 +22560,7 @@ ${content2}`;
   };
   const ConversationSelect = ({
     conversations,
+    projects,
     selected,
     setSelected,
     disabled,
@@ -22491,68 +22573,190 @@ ${content2}`;
     const { t: t2 } = useTranslation();
     const [query2, setQuery] = h$4("");
     const [chips, setChips] = h$4([]);
+    const [chipLogic, setChipLogic] = h$4("AND");
     const [showPopover, setShowPopover] = h$4(false);
     const lastClickedIndex = _(-1);
+    const pickerGroups = F$1(() => {
+      const originMap = /* @__PURE__ */ new Map();
+      for (const c2 of conversations) {
+        const val = c2.conversation_origin ?? null;
+        if (!originMap.has(val)) {
+          const label = val === null ? t2("Chip origin web label").replace("🌐 ", "") : val.charAt(0).toUpperCase() + val.slice(1);
+          originMap.set(val, label);
+        }
+      }
+      return [
+        {
+          group: t2("Chip group chat class"),
+          options: [
+            {
+              id: "cc_regular",
+              label: t2("Chip cc regular label"),
+              desc: t2("Chip cc regular desc"),
+              make: () => ({ type: "chat_class", value: "regular", mode: "include" })
+            },
+            {
+              id: "cc_gpt",
+              label: t2("Chip cc gpt label"),
+              desc: t2("Chip cc gpt desc"),
+              make: () => ({ type: "chat_class", value: "gpt", mode: "include" })
+            },
+            {
+              id: "cc_project",
+              label: t2("Chip cc project label"),
+              desc: t2("Chip cc project desc"),
+              make: () => ({ type: "chat_class", value: "project", mode: "include" })
+            }
+          ]
+        },
+        {
+          group: t2("Chip group origin"),
+          options: [...originMap.entries()].map(([val, label]) => ({
+            id: `orig_${val ?? "null"}`,
+            label: `🌐 ${label}`,
+            desc: val === null ? t2("Chip origin web desc") : `Started via ${label}`,
+            make: () => ({ type: "origin", value: val, label, mode: "include" })
+          }))
+        },
+        {
+          group: t2("Chip group status"),
+          options: [
+            {
+              id: "st_starred",
+              label: t2("Chip status starred label"),
+              desc: t2("Chip status starred desc"),
+              make: () => ({ type: "status", value: "starred", mode: "include" })
+            },
+            {
+              id: "st_temp",
+              label: t2("Chip status temporary label"),
+              desc: t2("Chip status temporary desc"),
+              make: () => ({ type: "status", value: "temporary", mode: "include" })
+            },
+            {
+              id: "st_pinned",
+              label: t2("Chip status pinned label"),
+              desc: t2("Chip status pinned desc"),
+              make: () => ({ type: "status", value: "pinned", mode: "include" })
+            }
+          ]
+        },
+        {
+          group: t2("Chip group duration"),
+          options: [
+            {
+              id: "dur",
+              label: t2("Chip duration label"),
+              desc: t2("Chip duration desc"),
+              make: () => ({ type: "duration_gte", days: 7, mode: "include" })
+            }
+          ]
+        },
+        {
+          group: t2("Chip group recency"),
+          options: [
+            {
+              id: "rec",
+              label: t2("Chip recency label"),
+              desc: t2("Chip recency desc"),
+              make: () => ({ type: "recency_lte", days: 30, mode: "include" })
+            }
+          ]
+        }
+      ];
+    }, [conversations, t2]);
+    const availableGroups = F$1(
+      () => pickerGroups.map((g2) => ({ ...g2, options: g2.options.filter((opt) => !isChipDuplicate(chips, opt.make())) })).filter((g2) => g2.options.length > 0),
+      [pickerGroups, chips]
+    );
     const filtered = F$1(() => {
       let result = conversations;
-      const q2 = query2.trim().toLowerCase();
-      if (q2) result = result.filter((c2) => c2.title.toLowerCase().includes(q2));
+      const q2 = query2.trim().replace(/#$/, "").trim();
+      if (q2) result = result.filter((c2) => textSearch(c2.title, q2));
       if (dateFrom) {
         const fromMs = new Date(dateFrom).getTime();
-        if (!Number.isNaN(fromMs)) {
-          result = result.filter((c2) => toMs(c2[filterField]) >= fromMs);
-        }
+        if (!Number.isNaN(fromMs)) result = result.filter((c2) => toMs(c2[filterField]) >= fromMs);
       }
       if (dateTo) {
         const toEndMs = (/* @__PURE__ */ new Date(`${dateTo}T23:59:59.999`)).getTime();
-        if (!Number.isNaN(toEndMs)) {
-          result = result.filter((c2) => toMs(c2[filterField]) <= toEndMs);
-        }
+        if (!Number.isNaN(toEndMs)) result = result.filter((c2) => toMs(c2[filterField]) <= toEndMs);
       }
-      return applyChips(result, chips);
-    }, [conversations, query2, dateFrom, dateTo, filterField, chips]);
+      return applyChips(result, chips, chipLogic, projects);
+    }, [conversations, query2, dateFrom, dateTo, filterField, chips, chipLogic, projects]);
     const allFilteredSelected = filtered.length > 0 && filtered.every((c2) => selected.some((x2) => x2.id === c2.id));
-    const addChip = (chip) => {
-      if (chips.some((c2) => c2.type === chip.type)) return;
-      setChips([...chips, chip]);
+    const addChip = T$4((chip) => {
+      if (isChipDuplicate(chips, chip)) return;
+      setChips((prev) => [...prev, chip]);
       setQuery((q2) => q2.endsWith("#") ? q2.slice(0, -1) : q2);
       lastClickedIndex.current = -1;
       setShowPopover(false);
-    };
-    const updateChip = (index2, updated) => {
-      const next = [...chips];
-      next[index2] = updated;
-      setChips(next);
-    };
-    const removeChip = (index2) => {
-      setChips(chips.filter((_24, i2) => i2 !== index2));
-    };
-    const availableOptions = CHIP_OPTIONS.filter((o3) => !chips.some((c2) => c2.type === o3.id));
+    }, [chips]);
+    const updateChip = T$4((index2, updated) => {
+      setChips((prev) => prev.map((c2, i2) => i2 === index2 ? updated : c2));
+    }, []);
+    const removeChip = T$4((index2) => {
+      setChips((prev) => prev.filter((_24, i2) => i2 !== index2));
+    }, []);
+    const toggleChipMode = T$4((index2) => {
+      setChips((prev) => prev.map((c2, i2) => i2 === index2 ? { ...c2, mode: c2.mode === "include" ? "exclude" : "include" } : c2));
+    }, []);
     return /* @__PURE__ */ o$8(k$3, { children: [
-      chips.length > 0 && /* @__PURE__ */ o$8("div", { className: "SelectChips", children: chips.map((chip, i2) => {
-        var _a;
-        const chipLabel = chip.type === "duration_gte" ? null : t2(((_a = CHIP_OPTIONS.find((o3) => o3.id === chip.type)) == null ? void 0 : _a.labelKey) ?? "");
-        return /* @__PURE__ */ o$8("span", { className: "SelectChip", children: [
-          chipLabel ?? /* @__PURE__ */ o$8(k$3, { children: [
-            t2("Filter chip active span"),
-            " ",
-            /* @__PURE__ */ o$8(
-              "input",
-              {
-                type: "number",
-                min: "1",
-                value: chip.days,
-                onChange: (e2) => {
-                  const days = Math.max(1, Number(e2.currentTarget.value));
-                  updateChip(i2, { type: "duration_gte", days });
+      chips.length > 0 && /* @__PURE__ */ o$8("div", { className: "SelectChips", children: [
+        chips.length > 1 && /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: `SelectChipLogic${chipLogic === "OR" ? " SelectChipLogicOr" : ""}`,
+            title: "Toggle AND / OR logic between filters",
+            onClick: () => setChipLogic((l2) => l2 === "AND" ? "OR" : "AND"),
+            children: chipLogic === "AND" ? t2("Chip logic and") : t2("Chip logic or")
+          }
+        ),
+        chips.map((chip, i2) => {
+          const label = chipDisplayLabel(chip);
+          const isExclude = chip.mode === "exclude";
+          return /* @__PURE__ */ o$8("span", { className: `SelectChip${isExclude ? " SelectChipExclude" : ""}`, children: [
+            label !== null && label,
+            chip.type === "duration_gte" && /* @__PURE__ */ o$8(k$3, { children: [
+              t2("Chip duration prefix"),
+              " ",
+              /* @__PURE__ */ o$8(
+                "input",
+                {
+                  type: "number",
+                  min: "1",
+                  value: chip.days,
+                  onChange: (e2) => updateChip(i2, { type: "duration_gte", days: Math.max(1, Number(e2.currentTarget.value)), mode: chip.mode })
                 }
+              ),
+              t2("Chip duration suffix")
+            ] }),
+            chip.type === "recency_lte" && /* @__PURE__ */ o$8(k$3, { children: [
+              t2("Chip recency prefix"),
+              " ",
+              /* @__PURE__ */ o$8(
+                "input",
+                {
+                  type: "number",
+                  min: "1",
+                  value: chip.days,
+                  onChange: (e2) => updateChip(i2, { type: "recency_lte", days: Math.max(1, Number(e2.currentTarget.value)), mode: chip.mode })
+                }
+              ),
+              t2("Chip recency suffix")
+            ] }),
+            /* @__PURE__ */ o$8(
+              "button",
+              {
+                className: `SelectChipMode${isExclude ? " SelectChipModeExclude" : ""}`,
+                title: isExclude ? "Currently excluding — click to include instead" : "Currently including — click to exclude instead",
+                onClick: () => toggleChipMode(i2),
+                children: isExclude ? t2("Chip mode exclude") : t2("Chip mode include")
               }
             ),
-            t2("Filter chip active suffix")
-          ] }),
-          /* @__PURE__ */ o$8("button", { className: "SelectChipRemove", onClick: () => removeChip(i2), children: "×" })
-        ] }, i2);
-      }) }),
+            /* @__PURE__ */ o$8("button", { className: "SelectChipRemove", onClick: () => removeChip(i2), children: "×" })
+          ] }, i2);
+        })
+      ] }),
       /* @__PURE__ */ o$8("div", { className: "relative", children: [
         /* @__PURE__ */ o$8(
           "input",
@@ -22567,26 +22771,29 @@ ${content2}`;
               const val = e2.currentTarget.value;
               lastClickedIndex.current = -1;
               setQuery(val);
-              setShowPopover(val.endsWith("#") && availableOptions.length > 0);
+              setShowPopover(val.endsWith("#") && availableGroups.length > 0);
             },
             onBlur: () => setTimeout(() => setShowPopover(false), 180)
           }
         ),
-        showPopover && /* @__PURE__ */ o$8("div", { className: "SelectFilterPopover", children: availableOptions.map((opt) => /* @__PURE__ */ o$8(
-          "button",
-          {
-            className: "SelectFilterOption",
-            onMouseDown: (e2) => {
-              e2.preventDefault();
-              addChip(opt.make());
+        showPopover && /* @__PURE__ */ o$8("div", { className: "SelectFilterPopover", children: availableGroups.map((g2) => /* @__PURE__ */ o$8("div", { children: [
+          /* @__PURE__ */ o$8("div", { className: "SelectFilterGroupHeader", children: g2.group }),
+          g2.options.map((opt) => /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "SelectFilterOption",
+              onMouseDown: (e2) => {
+                e2.preventDefault();
+                addChip(opt.make());
+              },
+              children: [
+                /* @__PURE__ */ o$8("strong", { children: opt.label }),
+                /* @__PURE__ */ o$8("small", { children: opt.desc })
+              ]
             },
-            children: [
-              /* @__PURE__ */ o$8("strong", { children: t2(opt.labelKey) }),
-              /* @__PURE__ */ o$8("small", { children: t2(opt.descKey) })
-            ]
-          },
-          opt.id
-        )) })
+            opt.id
+          ))
+        ] }, g2.group)) })
       ] }),
       /* @__PURE__ */ o$8("div", { className: "SelectToolbar", children: [
         /* @__PURE__ */ o$8(
@@ -22650,9 +22857,7 @@ ${content2}`;
                   const rangeItems = filtered.slice(start, end + 1);
                   const newSelected = [...selected];
                   for (const item of rangeItems) {
-                    if (!newSelected.some((x2) => x2.id === item.id)) {
-                      newSelected.push(item);
-                    }
+                    if (!newSelected.some((x2) => x2.id === item.id)) newSelected.push(item);
                   }
                   setSelected(newSelected);
                   return;
@@ -22667,9 +22872,7 @@ ${content2}`;
                     disabled,
                     checked: isSelected,
                     onCheckedChange: (checked) => {
-                      setSelected(
-                        checked ? [...selected, c2] : selected.filter((x2) => x2.id !== c2.id)
-                      );
+                      setSelected(checked ? [...selected, c2] : selected.filter((x2) => x2.id !== c2.id));
                     }
                   }
                 ),
@@ -22703,7 +22906,6 @@ ${content2}`;
     const [loading, setLoading] = h$4(false);
     const [error2, setError] = h$4("");
     const [processing, setProcessing] = h$4(false);
-    const [selectedProject, setSelectedProject] = h$4(null);
     const [selected, setSelected] = h$4([]);
     const [exportType, setExportType] = h$4(exportAllOptions[0].label);
     const [dateFrom, setDateFrom] = h$4("");
@@ -22743,14 +22945,11 @@ ${content2}`;
         setLocalConversations(data);
       };
       fileReader.readAsText(file);
-    }, [t2, setExportSource, setLocalConversations]);
+    }, [t2]);
     const startApiBatch = T$4((chunk) => {
       requestQueue.clear();
       chunk.forEach(({ id, title: title2 }) => {
-        requestQueue.add({
-          name: title2,
-          request: () => fetchConversation(id, exportType !== "JSON")
-        });
+        requestQueue.add({ name: title2, request: () => fetchConversation(id, exportType !== "JSON") });
       });
       requestQueue.start();
     }, [requestQueue, exportType]);
@@ -22761,7 +22960,6 @@ ${content2}`;
           ...prog,
           batchIndex: batchIndexRef.current,
           totalBatches: totalBatchesRef.current,
-          // Accumulate global completed count across batches
           completed: batchIndexRef.current * EXPORT_OPERATION_BATCH + prog.completed,
           total: totalBatchesRef.current * EXPORT_OPERATION_BATCH
         });
@@ -22790,7 +22988,7 @@ ${content2}`;
         const partIndex = batchIdx + 1;
         const callback = (_a = exportAllOptions.find((o3) => o3.label === exportType)) == null ? void 0 : _a.callback;
         if (callback) {
-          await callback(format, results, metaList, selectedProject == null ? void 0 : selectedProject.display.name, partIndex, totalBatches2);
+          await callback(format, results, metaList, void 0, partIndex, totalBatches2);
         }
         if (partIndex < totalBatches2) {
           await sleep(400);
@@ -22802,25 +23000,25 @@ ${content2}`;
         }
       });
       return () => off();
-    }, [requestQueue, exportAllOptions, exportType, format, metaList, selectedProject, startApiBatch]);
+    }, [requestQueue, exportAllOptions, exportType, format, metaList, startApiBatch]);
     p$6(() => {
       const off = archiveQueue.on("done", () => {
         setProcessing(false);
-        setApiConversations(apiConversations.filter((c2) => !selected.some((s2) => s2.id === c2.id)));
+        setApiConversations((prev) => prev.filter((c2) => !selected.some((s2) => s2.id === c2.id)));
         setSelected([]);
         alert(t2("Conversation Archived Message"));
       });
       return () => off();
-    }, [archiveQueue, apiConversations, selected, t2]);
+    }, [archiveQueue, selected, t2]);
     p$6(() => {
       const off = deleteQueue.on("done", () => {
         setProcessing(false);
-        setApiConversations(apiConversations.filter((c2) => !selected.some((s2) => s2.id === c2.id)));
+        setApiConversations((prev) => prev.filter((c2) => !selected.some((s2) => s2.id === c2.id)));
         setSelected([]);
         alert(t2("Conversation Deleted Message"));
       });
       return () => off();
-    }, [deleteQueue, apiConversations, selected, t2]);
+    }, [deleteQueue, selected, t2]);
     const exportAllFromApi = T$4(() => {
       if (disabled) return;
       const chunks = chunkArray(selected, EXPORT_OPERATION_BATCH);
@@ -22847,72 +23045,51 @@ ${content2}`;
       const chunks = chunkArray(results, EXPORT_OPERATION_BATCH);
       setProcessing(true);
       for (let i2 = 0; i2 < chunks.length; i2++) {
-        await callback(format, chunks[i2], metaList, selectedProject == null ? void 0 : selectedProject.display.name, i2 + 1, chunks.length);
+        await callback(format, chunks[i2], metaList, void 0, i2 + 1, chunks.length);
         if (i2 < chunks.length - 1) await sleep(400);
       }
       setProcessing(false);
-    }, [
-      disabled,
-      selected,
-      localConversations,
-      exportAllOptions,
-      exportType,
-      format,
-      metaList,
-      selectedProject
-    ]);
+    }, [disabled, selected, localConversations, exportAllOptions, exportType, format, metaList]);
     const exportAll = F$1(() => {
       return exportSource === "API" ? exportAllFromApi : exportAllFromLocal;
     }, [exportSource, exportAllFromApi, exportAllFromLocal]);
     const deleteAll = T$4(() => {
       if (disabled) return;
-      const result = confirm(t2("Conversation Delete Alert"));
-      if (!result) return;
+      if (!confirm(t2("Conversation Delete Alert"))) return;
       deleteQueue.clear();
       selected.forEach(({ id, title: title2 }) => {
-        deleteQueue.add({
-          name: title2,
-          request: () => deleteConversation(id)
-        });
+        deleteQueue.add({ name: title2, request: () => deleteConversation(id) });
       });
       deleteQueue.start();
     }, [disabled, selected, deleteQueue, t2]);
     const archiveAll = T$4(() => {
       if (disabled) return;
-      const result = confirm(t2("Conversation Archive Alert"));
-      if (!result) return;
+      if (!confirm(t2("Conversation Archive Alert"))) return;
       archiveQueue.clear();
       selected.forEach(({ id, title: title2 }) => {
-        archiveQueue.add({
-          name: title2,
-          request: () => archiveConversation(id)
-        });
+        archiveQueue.add({ name: title2, request: () => archiveConversation(id) });
       });
       archiveQueue.start();
     }, [disabled, selected, archiveQueue, t2]);
     p$6(() => {
-      fetchProjects().then(setProjects).catch((err) => setError(err.toString()));
+      fetchProjects().then(setProjects).catch((err) => console.error("Failed to fetch projects:", err));
     }, []);
     p$6(() => {
-      if (selectedProject === void 0) return;
       setSelected([]);
       setApiConversations([]);
       setHasMore(false);
       setTotalAvailable(null);
       setLoading(true);
-      const onBatch = (batch) => setApiConversations((prev) => [...prev, ...batch]);
-      const fetcher = (selectedProject == null ? void 0 : selectedProject.id) === ALL_PROJECTS_ID ? fetchAllConversationsAll(projects, exportAllLimit, onBatch).then(() => setHasMore(false)) : fetchAllConversations((selectedProject == null ? void 0 : selectedProject.id) ?? null, exportAllLimit, onBatch, setHasMore);
-      fetcher.catch((err) => {
+      fetchAllConversations(null, exportAllLimit, (batch) => setApiConversations((prev) => [...prev, ...batch]), setHasMore).catch((err) => {
         console.error("Error fetching conversations:", err);
         setError(err.message || "Failed to load conversations");
       }).finally(() => setLoading(false));
-    }, [selectedProject, exportAllLimit, projects]);
+    }, [exportAllLimit]);
     const loadMore = T$4(async () => {
       if (loadingMore) return;
       setLoadingMore(true);
       try {
-        const projectId = (selectedProject == null ? void 0 : selectedProject.id) === ALL_PROJECTS_ID ? null : (selectedProject == null ? void 0 : selectedProject.id) ?? null;
-        const page = await fetchConversationsPage(projectId, apiConversations.length, EXPORT_OPERATION_BATCH);
+        const page = await fetchConversationsPage(null, apiConversations.length, EXPORT_OPERATION_BATCH);
         setApiConversations((prev) => [...prev, ...page.items]);
         if (page.total !== null) setTotalAvailable(page.total);
         setHasMore(
@@ -22923,7 +23100,7 @@ ${content2}`;
       } finally {
         setLoadingMore(false);
       }
-    }, [loadingMore, selectedProject, apiConversations.length]);
+    }, [loadingMore, apiConversations.length]);
     const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1;
     return /* @__PURE__ */ o$8(k$3, { children: [
       /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f99233281efd08a0, { className: "DialogTitle", children: t2("Export Dialog Title") }),
@@ -22945,7 +23122,6 @@ ${content2}`;
           onChange: onUpload
         }
       ),
-      exportSource === "API" && /* @__PURE__ */ o$8(ProjectSelect, { projects, selected: selectedProject, setSelected: setSelectedProject, disabled: processing }),
       /* @__PURE__ */ o$8(
         DateFilter,
         {
@@ -22958,10 +23134,11 @@ ${content2}`;
           disabled: processing
         }
       ),
-      selectedProject === void 0 ? /* @__PURE__ */ o$8("div", { className: "SelectList flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm", children: t2("Select a source to load conversations") }) : /* @__PURE__ */ o$8(
+      /* @__PURE__ */ o$8(
         ConversationSelect,
         {
           conversations,
+          projects,
           selected,
           setSelected,
           disabled: processing,
@@ -22970,8 +23147,7 @@ ${content2}`;
           dateFrom,
           dateTo,
           filterField
-        },
-        (selectedProject == null ? void 0 : selectedProject.id) ?? "no-project"
+        }
       ),
       exportSource === "API" && !loading && !processing && hasMore && /* @__PURE__ */ o$8("div", { className: "flex items-center justify-center mt-2 mb-1 gap-2", children: [
         /* @__PURE__ */ o$8(
@@ -22995,15 +23171,7 @@ ${content2}`;
         /* @__PURE__ */ o$8("div", { className: "flex flex-grow" }),
         /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: archiveAll, children: t2("Archive") }),
         /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: deleteAll, children: t2("Delete") }),
-        /* @__PURE__ */ o$8(
-          "button",
-          {
-            className: "Button green",
-            disabled,
-            onClick: exportAll,
-            children: t2("Export")
-          }
-        )
+        /* @__PURE__ */ o$8("button", { className: "Button green", disabled, onClick: exportAll, children: t2("Export") })
       ] }),
       totalBatches > 1 && !processing && /* @__PURE__ */ o$8("p", { className: "mt-1.5 text-xs text-right text-gray-400 dark:text-gray-500", children: `${totalBatches} downloads · 100 conversations each` }),
       processing && /* @__PURE__ */ o$8(k$3, { children: [
@@ -23023,20 +23191,13 @@ ${content2}`;
     ] });
   };
   const ExportDialog = ({ format, open, onOpenChange, children }) => {
-    return /* @__PURE__ */ o$8(
-      $5d3850c4d0b4e6c7$export$be92b6f5f03c0fe9,
-      {
-        open,
-        onOpenChange,
-        children: [
-          /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$41fb9f06171c75f4, { asChild: true, children }),
-          /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$602eac185826482c, { children: [
-            /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$c6fdb837b070b4ff, { className: "DialogOverlay" }),
-            /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$7c6e2c02157bb7d2, { className: "DialogContent", children: open && /* @__PURE__ */ o$8(DialogContent, { format }) })
-          ] })
-        ]
-      }
-    );
+    return /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$be92b6f5f03c0fe9, { open, onOpenChange, children: [
+      /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$41fb9f06171c75f4, { asChild: true, children }),
+      /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$602eac185826482c, { children: [
+        /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$c6fdb837b070b4ff, { className: "DialogOverlay" }),
+        /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$7c6e2c02157bb7d2, { className: "DialogContent", children: open && /* @__PURE__ */ o$8(DialogContent, { format }) })
+      ] })
+    ] });
   };
   const TIMEOUT = 2500;
   const MenuItem = ({ text: text2, successText, disabled = false, title: title2, icon: Icon, onClick, className }) => {
