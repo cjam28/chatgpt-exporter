@@ -15,6 +15,17 @@ import type { ApiConversationItem, ApiConversationWithId, ApiProjectInfo } from 
 import type { FC } from '../type'
 import type { ChangeEvent } from 'preact/compat'
 
+/**
+ * Normalise create_time / update_time to milliseconds so we can compare
+ * against Date.getTime() values regardless of whether the API returned an
+ * ISO 8601 string (current behaviour) or a Unix-seconds number (legacy).
+ */
+function toMs(time: number | string | undefined): number {
+    if (time == null) return 0
+    if (typeof time === 'number') return time * 1000
+    return new Date(time).getTime()
+}
+
 function chunkArray<T>(arr: T[], size: number): T[][] {
     const result: T[][] = []
     for (let i = 0; i < arr.length; i += size) {
@@ -60,19 +71,33 @@ const ProjectSelect: FC<ProjectSelectProps> = ({ projects, selected, setSelected
     )
 }
 
+type DateFilterField = 'create_time' | 'update_time'
+
 interface DateFilterProps {
     dateFrom: string
     dateTo: string
+    filterField: DateFilterField
     setDateFrom: (v: string) => void
     setDateTo: (v: string) => void
+    setFilterField: (v: DateFilterField) => void
     disabled: boolean
 }
 
-const DateFilter: FC<DateFilterProps> = ({ dateFrom, dateTo, setDateFrom, setDateTo, disabled }) => {
+const DateFilter: FC<DateFilterProps> = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
     const { t } = useTranslation()
     return (
-        <div className="flex items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300">
+        <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300">
             <span className="shrink-0" title={t('Date Filter Hint')}>{t('Date Filter Label')}</span>
+            <select
+                className="Select"
+                value={filterField}
+                disabled={disabled}
+                onChange={e => setFilterField(e.currentTarget.value as DateFilterField)}
+                style={{ minWidth: '5.5rem' }}
+            >
+                <option value="create_time">{t('Date Filter Field Created')}</option>
+                <option value="update_time">{t('Date Filter Field Updated')}</option>
+            </select>
             <input
                 type="date"
                 className="Input"
@@ -115,6 +140,7 @@ interface ConversationSelectProps {
     error: string
     dateFrom: string
     dateTo: string
+    filterField: DateFilterField
 }
 
 const ConversationSelect: FC<ConversationSelectProps> = ({
@@ -126,6 +152,7 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     error,
     dateFrom,
     dateTo,
+    filterField,
 }) => {
     const { t } = useTranslation()
     const [query, setQuery] = useState('')
@@ -136,16 +163,20 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
         const q = query.trim().toLowerCase()
         if (q) result = result.filter(c => c.title.toLowerCase().includes(q))
         if (dateFrom) {
-            const fromTs = new Date(dateFrom).getTime() / 1000
-            if (!Number.isNaN(fromTs)) result = result.filter(c => c.create_time >= fromTs)
+            const fromMs = new Date(dateFrom).getTime()
+            if (!Number.isNaN(fromMs)) {
+                result = result.filter(c => toMs(c[filterField]) >= fromMs)
+            }
         }
         if (dateTo) {
-            // Include the full day by treating dateTo as end-of-day
-            const toTs = new Date(`${dateTo}T23:59:59`).getTime() / 1000
-            if (!Number.isNaN(toTs)) result = result.filter(c => c.create_time <= toTs)
+            // Include the full end-of-day in local time
+            const toEndMs = new Date(`${dateTo}T23:59:59.999`).getTime()
+            if (!Number.isNaN(toEndMs)) {
+                result = result.filter(c => toMs(c[filterField]) <= toEndMs)
+            }
         }
         return result
-    }, [conversations, query, dateFrom, dateTo])
+    }, [conversations, query, dateFrom, dateTo, filterField])
 
     const allFilteredSelected = filtered.length > 0
         && filtered.every(c => selected.some(x => x.id === c.id))
@@ -274,6 +305,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     const [exportType, setExportType] = useState(exportAllOptions[0].label)
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
+    const [filterField, setFilterField] = useState<DateFilterField>('create_time')
     const disabled = processing || !!error || selected.length === 0
 
     const requestQueue = useMemo(() => new RequestQueue<ApiConversationWithId>(200, 1600), [])
@@ -535,8 +567,10 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             <DateFilter
                 dateFrom={dateFrom}
                 dateTo={dateTo}
+                filterField={filterField}
                 setDateFrom={setDateFrom}
                 setDateTo={setDateTo}
+                setFilterField={setFilterField}
                 disabled={processing}
             />
             {selectedProject === undefined
@@ -556,6 +590,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                         error={error}
                         dateFrom={dateFrom}
                         dateTo={dateTo}
+                        filterField={filterField}
                     />
                     )}
             {selected.length > 0 && !processing && (

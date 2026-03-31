@@ -1115,6 +1115,7 @@ html {
   const KEY_EXPORT_ALL_LIMIT = "exporter:export_all_limit";
   const KEY_OAI_LOCALE = "oai/apps/locale";
   const KEY_OAI_HISTORY_DISABLED = "oai/apps/historyDisabled";
+  const EXPORT_OPERATION_BATCH = 100;
   var _GM_deleteValue = /* @__PURE__ */ (() => typeof GM_deleteValue != "undefined" ? GM_deleteValue : void 0)();
   var _GM_getValue = /* @__PURE__ */ (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
   var _GM_setValue = /* @__PURE__ */ (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
@@ -8206,11 +8207,20 @@ html {
     "Select Project": "Select Project",
     "(no project)": "(no project)",
     "Export All Limit": "Export All Limit",
-    "Export All Limit Description": "Set the maximum number of conversations to load in the 'Export All' dialog.",
+    "Export All Limit Description": "Set the maximum number of conversations to load. Exports run in waves of 100 conversations to stay within API rate limits.",
     "Select a source to load conversations": "Select a project above to load conversations.",
     Search: Search$8,
     "Last 100": "Last 100",
-    "No results": "No results"
+    "No results": "No results",
+    "Date From": "From",
+    "Date To": "To",
+    "Date Filter Label": "Filter by date",
+    "Date Filter Hint": "Filters conversations by the selected timestamp field returned by the API.",
+    "Date Filter Field Created": "Created",
+    "Date Filter Field Updated": "Updated",
+    "Selected count": "{{count}} selected",
+    "Export batch info": "Exports in batches of 100 per download",
+    "Exporting batch": "Exporting batch {{current}} of {{total}}"
   };
   const title$7 = "ChatGPT Exporter";
   const ExportHelper$7 = "Exportar";
@@ -9737,11 +9747,24 @@ html {
   function normalizeProjectName(projectName) {
     return projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   }
-  function buildZipFileName(format, projectName) {
+  function partSuffix(partInfo) {
+    if (!partInfo || partInfo.total <= 1) return "";
+    const pad = (n2) => String(n2).padStart(2, "0");
+    return `-part-${pad(partInfo.part)}-of-${pad(partInfo.total)}`;
+  }
+  function buildZipFileName(format, projectName, partInfo) {
+    const suffix = partSuffix(partInfo);
     if (projectName) {
-      return `chatgpt-export-${format}-project-${normalizeProjectName(projectName)}.zip`;
+      return `chatgpt-export-${format}-project-${normalizeProjectName(projectName)}${suffix}.zip`;
     }
-    return `chatgpt-export-${format}.zip`;
+    return `chatgpt-export-${format}${suffix}.zip`;
+  }
+  function buildJsonBatchFileName(projectName, partInfo) {
+    const suffix = partSuffix(partInfo);
+    if (projectName) {
+      return `chatgpt-export-project-${normalizeProjectName(projectName)}${suffix}.json`;
+    }
+    return `chatgpt-export${suffix}.json`;
   }
   function getFileNameWithFormat(format, ext, {
     title: title2 = document.title,
@@ -20860,7 +20883,7 @@ html {
     downloadFile(fileName, "text/html", standardizeLineBreaks(html2));
     return true;
   }
-  async function exportAllToHtml(fileNameFormat, apiConversations, metaList, projectName) {
+  async function exportAllToHtml(fileNameFormat, apiConversations, metaList, projectName, partIndex, totalParts) {
     const userAvatar = await getUserAvatar();
     const zip = new JSZip();
     const filenameMap = /* @__PURE__ */ new Map();
@@ -20889,7 +20912,8 @@ html {
         level: 9
       }
     });
-    downloadFile(buildZipFileName("html", projectName), "application/zip", blob);
+    const partInfo = partIndex != null && totalParts != null ? { part: partIndex, total: totalParts } : void 0;
+    downloadFile(buildZipFileName("html", projectName, partInfo), "application/zip", blob);
     return true;
   }
   function conversationToHtml(conversation, avatar, metaList) {
@@ -21351,13 +21375,13 @@ ${content2.text}
     downloadFile(fileName, "application/json", content2);
     return true;
   }
-  async function exportAllToOfficialJson(_fileNameFormat, apiConversations, _metaList, projectName) {
+  async function exportAllToOfficialJson(_fileNameFormat, apiConversations, _metaList, projectName, partIndex, totalParts) {
+    const partInfo = partIndex != null && totalParts != null ? { part: partIndex, total: totalParts } : void 0;
     const content2 = conversationToJson(apiConversations);
-    const baseName = projectName ? `chatgpt-export-project-${normalizeProjectName(projectName)}` : "chatgpt-export";
-    downloadFile(`${baseName}.json`, "application/json", content2);
+    downloadFile(buildJsonBatchFileName(projectName, partInfo), "application/json", content2);
     return true;
   }
-  async function exportAllToJson(fileNameFormat, apiConversations, _metaList, projectName) {
+  async function exportAllToJson(fileNameFormat, apiConversations, _metaList, projectName, partIndex, totalParts) {
     const zip = new JSZip();
     const filenameMap = /* @__PURE__ */ new Map();
     const conversations = apiConversations.map((x2) => ({
@@ -21388,7 +21412,8 @@ ${content2.text}
         level: 9
       }
     });
-    downloadFile(buildZipFileName("json", projectName), "application/zip", blob);
+    const partInfo = partIndex != null && totalParts != null ? { part: partIndex, total: totalParts } : void 0;
+    downloadFile(buildZipFileName("json", projectName, partInfo), "application/zip", blob);
     return true;
   }
   function conversationToJson(conversation) {
@@ -21407,7 +21432,7 @@ ${content2.text}
     downloadFile(fileName, "text/markdown", standardizeLineBreaks(markdown));
     return true;
   }
-  async function exportAllToMarkdown(fileNameFormat, apiConversations, metaList, projectName) {
+  async function exportAllToMarkdown(fileNameFormat, apiConversations, metaList, projectName, partIndex, totalParts) {
     const zip = new JSZip();
     const filenameMap = /* @__PURE__ */ new Map();
     const conversations = apiConversations.map((x2) => processConversation(x2));
@@ -21435,7 +21460,8 @@ ${content2.text}
         level: 9
       }
     });
-    downloadFile(buildZipFileName("markdown", projectName), "application/zip", blob);
+    const partInfo = partIndex != null && totalParts != null ? { part: partIndex, total: totalParts } : void 0;
+    downloadFile(buildZipFileName("markdown", projectName, partInfo), "application/zip", blob);
     return true;
   }
   const LatexRegex$1 = /(\s\$\$.+\$\$\s|\s\$.+\$\s|\\\[.+\\\]|\\\(.+\\\))|(^\$$[\S\s]+^\$$)|(^\$\$[\S\s]+^\$\$$)/gm;
@@ -22109,6 +22135,18 @@ ${content2}`;
     );
   };
   const useSettingContext = () => q$1(SettingContext);
+  function toMs(time) {
+    if (time == null) return 0;
+    if (typeof time === "number") return time * 1e3;
+    return new Date(time).getTime();
+  }
+  function chunkArray(arr, size) {
+    const result = [];
+    for (let i2 = 0; i2 < arr.length; i2 += size) {
+      result.push(arr.slice(i2, i2 + size));
+    }
+    return result;
+  }
   const ProjectSelect = ({ projects, selected, setSelected, disabled }) => {
     const { t: t2 } = useTranslation();
     const value = selected === void 0 ? "__unselected__" : (selected == null ? void 0 : selected.id) || "";
@@ -22137,25 +22175,94 @@ ${content2}`;
       )
     ] });
   };
-  const EXPORT_LIMIT = 100;
+  const DateFilter = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
+    const { t: t2 } = useTranslation();
+    return /* @__PURE__ */ o$8("div", { className: "flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300", children: [
+      /* @__PURE__ */ o$8("span", { className: "shrink-0", title: t2("Date Filter Hint"), children: t2("Date Filter Label") }),
+      /* @__PURE__ */ o$8(
+        "select",
+        {
+          className: "Select",
+          value: filterField,
+          disabled,
+          onChange: (e2) => setFilterField(e2.currentTarget.value),
+          style: { minWidth: "5.5rem" },
+          children: [
+            /* @__PURE__ */ o$8("option", { value: "create_time", children: t2("Date Filter Field Created") }),
+            /* @__PURE__ */ o$8("option", { value: "update_time", children: t2("Date Filter Field Updated") })
+          ]
+        }
+      ),
+      /* @__PURE__ */ o$8(
+        "input",
+        {
+          type: "date",
+          className: "Input",
+          value: dateFrom,
+          disabled,
+          onChange: (e2) => setDateFrom(e2.currentTarget.value),
+          style: { maxWidth: "9rem" }
+        }
+      ),
+      /* @__PURE__ */ o$8("span", { className: "shrink-0", children: "–" }),
+      /* @__PURE__ */ o$8(
+        "input",
+        {
+          type: "date",
+          className: "Input",
+          value: dateTo,
+          disabled,
+          onChange: (e2) => setDateTo(e2.currentTarget.value),
+          style: { maxWidth: "9rem" }
+        }
+      ),
+      (dateFrom || dateTo) && /* @__PURE__ */ o$8(
+        "button",
+        {
+          className: "ml-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200",
+          title: "Clear date filter",
+          onClick: () => {
+            setDateFrom("");
+            setDateTo("");
+          },
+          children: "✕"
+        }
+      )
+    ] });
+  };
   const ConversationSelect = ({
     conversations,
     selected,
     setSelected,
     disabled,
     loading,
-    error: error2
+    error: error2,
+    dateFrom,
+    dateTo,
+    filterField
   }) => {
     const { t: t2 } = useTranslation();
     const [query2, setQuery] = h$4("");
     const lastClickedIndex = _(-1);
     const filtered = F$1(() => {
+      let result = conversations;
       const q2 = query2.trim().toLowerCase();
-      if (!q2) return conversations;
-      return conversations.filter((c2) => c2.title.toLowerCase().includes(q2));
-    }, [conversations, query2]);
-    const atCap = selected.length >= EXPORT_LIMIT;
-    const allFilteredSelected = filtered.length > 0 && filtered.slice(0, EXPORT_LIMIT).every((c2) => selected.some((x2) => x2.id === c2.id));
+      if (q2) result = result.filter((c2) => c2.title.toLowerCase().includes(q2));
+      if (dateFrom) {
+        const fromMs = new Date(dateFrom).getTime();
+        if (!Number.isNaN(fromMs)) {
+          result = result.filter((c2) => toMs(c2[filterField]) >= fromMs);
+        }
+      }
+      if (dateTo) {
+        const toEndMs = (/* @__PURE__ */ new Date(`${dateTo}T23:59:59.999`)).getTime();
+        if (!Number.isNaN(toEndMs)) {
+          result = result.filter((c2) => toMs(c2[filterField]) <= toEndMs);
+        }
+      }
+      return result;
+    }, [conversations, query2, dateFrom, dateTo, filterField]);
+    const allFilteredSelected = filtered.length > 0 && filtered.every((c2) => selected.some((x2) => x2.id === c2.id));
     return /* @__PURE__ */ o$8(k$3, { children: [
       /* @__PURE__ */ o$8(
         "input",
@@ -22179,7 +22286,7 @@ ${content2}`;
             checked: allFilteredSelected,
             onCheckedChange: (checked) => {
               lastClickedIndex.current = -1;
-              setSelected(checked ? filtered.slice(0, EXPORT_LIMIT) : []);
+              setSelected(checked ? filtered : []);
             }
           }
         ),
@@ -22196,14 +22303,14 @@ ${content2}`;
             {
               className: "Button neutral",
               disabled: disabled || conversations.length === 0,
-              onClick: () => setSelected(conversations.slice(0, EXPORT_LIMIT)),
+              onClick: () => setSelected(filtered.slice(0, EXPORT_OPERATION_BATCH)),
               children: t2("Last 100")
             }
           ),
-          /* @__PURE__ */ o$8("span", { className: `text-sm font-medium tabular-nums ${atCap ? "text-red-500 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}`, children: [
+          /* @__PURE__ */ o$8("span", { className: "text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400", children: [
             selected.length,
-            "/",
-            EXPORT_LIMIT
+            " / ",
+            filtered.length
           ] })
         ] })
       ] }),
@@ -22219,13 +22326,12 @@ ${content2}`;
         ] }),
         filtered.map((c2, index2) => {
           const isSelected = selected.some((x2) => x2.id === c2.id);
-          const itemDisabled = disabled || atCap && !isSelected;
           return /* @__PURE__ */ o$8(
             "li",
             {
               className: "SelectItem",
               onClickCapture: (e2) => {
-                if (itemDisabled) return;
+                if (disabled) return;
                 if (e2.shiftKey && lastClickedIndex.current !== -1) {
                   e2.preventDefault();
                   const start = Math.min(lastClickedIndex.current, index2);
@@ -22234,7 +22340,6 @@ ${content2}`;
                   const newSelected = [...selected];
                   for (const item of rangeItems) {
                     if (!newSelected.some((x2) => x2.id === item.id)) {
-                      if (newSelected.length >= EXPORT_LIMIT) break;
                       newSelected.push(item);
                     }
                   }
@@ -22247,10 +22352,9 @@ ${content2}`;
                 CheckBox,
                 {
                   label: c2.title,
-                  disabled: itemDisabled,
+                  disabled,
                   checked: isSelected,
                   onCheckedChange: (checked) => {
-                    if (checked && atCap) return;
                     setSelected(
                       checked ? [...selected, c2] : selected.filter((x2) => x2.id !== c2.id)
                     );
@@ -22287,6 +22391,9 @@ ${content2}`;
     const [selectedProject, setSelectedProject] = h$4(void 0);
     const [selected, setSelected] = h$4([]);
     const [exportType, setExportType] = h$4(exportAllOptions[0].label);
+    const [dateFrom, setDateFrom] = h$4("");
+    const [dateTo, setDateTo] = h$4("");
+    const [filterField, setFilterField] = h$4("create_time");
     const disabled = processing || !!error2 || selected.length === 0;
     const requestQueue = F$1(() => new RequestQueue(200, 1600), []);
     const archiveQueue = F$1(() => new RequestQueue(200, 1600), []);
@@ -22295,8 +22402,13 @@ ${content2}`;
       total: 0,
       completed: 0,
       currentName: "",
-      currentStatus: ""
+      currentStatus: "",
+      batchIndex: 0,
+      totalBatches: 0
     });
+    const pendingBatchesRef = _([]);
+    const batchIndexRef = _(0);
+    const totalBatchesRef = _(0);
     const onUpload = T$4((e2) => {
       var _a, _b;
       const file = (_b = (_a = e2.target) == null ? void 0 : _a.files) == null ? void 0 : _b[0];
@@ -22314,36 +22426,65 @@ ${content2}`;
       };
       fileReader.readAsText(file);
     }, [t2, setExportSource, setLocalConversations]);
+    const startApiBatch = T$4((chunk) => {
+      requestQueue.clear();
+      chunk.forEach(({ id, title: title2 }) => {
+        requestQueue.add({
+          name: title2,
+          request: () => fetchConversation(id, exportType !== "JSON")
+        });
+      });
+      requestQueue.start();
+    }, [requestQueue, exportType]);
     p$6(() => {
-      const off = requestQueue.on("progress", (progress2) => {
+      const off = requestQueue.on("progress", (prog) => {
         setProcessing(true);
-        setProgress(progress2);
+        setProgress({
+          ...prog,
+          batchIndex: batchIndexRef.current,
+          totalBatches: totalBatchesRef.current,
+          // Accumulate global completed count across batches
+          completed: batchIndexRef.current * EXPORT_OPERATION_BATCH + prog.completed,
+          total: totalBatchesRef.current * EXPORT_OPERATION_BATCH
+        });
       });
       return () => off();
     }, [requestQueue]);
     p$6(() => {
-      const off = archiveQueue.on("progress", (progress2) => {
+      const off = archiveQueue.on("progress", (prog) => {
         setProcessing(true);
-        setProgress(progress2);
+        setProgress({ ...prog, batchIndex: 0, totalBatches: 0 });
       });
       return () => off();
     }, [archiveQueue]);
     p$6(() => {
-      const off = deleteQueue.on("progress", (progress2) => {
+      const off = deleteQueue.on("progress", (prog) => {
         setProcessing(true);
-        setProgress(progress2);
+        setProgress({ ...prog, batchIndex: 0, totalBatches: 0 });
       });
       return () => off();
     }, [deleteQueue]);
     p$6(() => {
-      const off = requestQueue.on("done", (results) => {
+      const off = requestQueue.on("done", async (results) => {
         var _a;
-        setProcessing(false);
+        const batchIdx = batchIndexRef.current;
+        const totalBatches2 = totalBatchesRef.current;
+        const partIndex = batchIdx + 1;
         const callback = (_a = exportAllOptions.find((o3) => o3.label === exportType)) == null ? void 0 : _a.callback;
-        if (callback) callback(format, results, metaList, selectedProject == null ? void 0 : selectedProject.display.name);
+        if (callback) {
+          await callback(format, results, metaList, selectedProject == null ? void 0 : selectedProject.display.name, partIndex, totalBatches2);
+        }
+        if (partIndex < totalBatches2) {
+          await sleep(400);
+          batchIndexRef.current++;
+          const nextChunk = pendingBatchesRef.current[batchIndexRef.current];
+          if (nextChunk) startApiBatch(nextChunk);
+        } else {
+          setProcessing(false);
+        }
       });
       return () => off();
-    }, [requestQueue, exportAllOptions, exportType, format, metaList, selectedProject]);
+    }, [requestQueue, exportAllOptions, exportType, format, metaList, selectedProject, startApiBatch]);
     p$6(() => {
       const off = archiveQueue.on("done", () => {
         setProcessing(false);
@@ -22364,21 +22505,34 @@ ${content2}`;
     }, [deleteQueue, apiConversations, selected, t2]);
     const exportAllFromApi = T$4(() => {
       if (disabled) return;
-      requestQueue.clear();
-      selected.forEach(({ id, title: title2 }) => {
-        requestQueue.add({
-          name: title2,
-          request: () => fetchConversation(id, exportType !== "JSON")
-        });
+      const chunks = chunkArray(selected, EXPORT_OPERATION_BATCH);
+      pendingBatchesRef.current = chunks;
+      batchIndexRef.current = 0;
+      totalBatchesRef.current = chunks.length;
+      setProcessing(true);
+      setProgress({
+        total: selected.length,
+        completed: 0,
+        currentName: "",
+        currentStatus: "processing",
+        batchIndex: 0,
+        totalBatches: chunks.length
       });
-      requestQueue.start();
-    }, [disabled, selected, requestQueue, exportType]);
-    const exportAllFromLocal = T$4(() => {
+      startApiBatch(chunks[0]);
+    }, [disabled, selected, startApiBatch]);
+    const exportAllFromLocal = T$4(async () => {
       var _a;
       if (disabled) return;
       const results = localConversations.filter((c2) => selected.some((s2) => s2.id === c2.id));
       const callback = (_a = exportAllOptions.find((o3) => o3.label === exportType)) == null ? void 0 : _a.callback;
-      if (callback) callback(format, results, metaList, selectedProject == null ? void 0 : selectedProject.display.name);
+      if (!callback) return;
+      const chunks = chunkArray(results, EXPORT_OPERATION_BATCH);
+      setProcessing(true);
+      for (let i2 = 0; i2 < chunks.length; i2++) {
+        await callback(format, chunks[i2], metaList, selectedProject == null ? void 0 : selectedProject.display.name, i2 + 1, chunks.length);
+        if (i2 < chunks.length - 1) await sleep(400);
+      }
+      setProcessing(false);
     }, [
       disabled,
       selected,
@@ -22435,6 +22589,7 @@ ${content2}`;
         setError(err.message || "Failed to load conversations");
       }).finally(() => setLoading(false));
     }, [selectedProject, exportAllLimit]);
+    const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1;
     return /* @__PURE__ */ o$8(k$3, { children: [
       /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f99233281efd08a0, { className: "DialogTitle", children: t2("Export Dialog Title") }),
       /* @__PURE__ */ o$8("div", { className: "flex items-center text-gray-600 dark:text-gray-300 flex justify-between border-b-[1px] pb-3 mb-3 dark:border-gray-700", children: [
@@ -22457,6 +22612,18 @@ ${content2}`;
       ),
       exportSource === "API" && /* @__PURE__ */ o$8("div", { className: "flex items-center text-gray-600 dark:text-gray-300 flex justify-between mb-3", children: t2("Export from API") }),
       /* @__PURE__ */ o$8(ProjectSelect, { projects, selected: selectedProject, setSelected: setSelectedProject, disabled: processing }),
+      /* @__PURE__ */ o$8(
+        DateFilter,
+        {
+          dateFrom,
+          dateTo,
+          filterField,
+          setDateFrom,
+          setDateTo,
+          setFilterField,
+          disabled: processing
+        }
+      ),
       selectedProject === void 0 ? /* @__PURE__ */ o$8("div", { className: "SelectList flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm", children: t2("Select a source to load conversations") }) : /* @__PURE__ */ o$8(
         ConversationSelect,
         {
@@ -22465,11 +22632,18 @@ ${content2}`;
           setSelected,
           disabled: processing,
           loading,
-          error: error2
+          error: error2,
+          dateFrom,
+          dateTo,
+          filterField
         },
         (selectedProject == null ? void 0 : selectedProject.id) ?? "no-project"
       ),
-      /* @__PURE__ */ o$8("div", { className: "flex mt-6", style: { justifyContent: "space-between" }, children: [
+      selected.length > 0 && !processing && /* @__PURE__ */ o$8("p", { className: "mt-1 text-xs text-gray-400 dark:text-gray-500", children: [
+        t2("Export batch info"),
+        totalBatches > 1 && ` (${totalBatches} downloads)`
+      ] }),
+      /* @__PURE__ */ o$8("div", { className: "flex mt-3", style: { justifyContent: "space-between" }, children: [
         /* @__PURE__ */ o$8("select", { className: "Select", disabled: processing, value: exportType, onChange: (e2) => setExportType(e2.currentTarget.value), children: exportAllOptions.map(({ label }) => /* @__PURE__ */ o$8("option", { value: label, children: label }, t2(label))) }),
         /* @__PURE__ */ o$8("div", { className: "flex flex-grow" }),
         /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: archiveAll, children: t2("Archive") }),
@@ -22479,9 +22653,15 @@ ${content2}`;
       processing && /* @__PURE__ */ o$8(k$3, { children: [
         /* @__PURE__ */ o$8("div", { className: "mt-2 mb-1 justify-between flex", children: [
           /* @__PURE__ */ o$8("span", { className: "truncate mr-8", children: progress.currentName }),
-          /* @__PURE__ */ o$8("span", { children: `${progress.completed}/${progress.total}` })
+          /* @__PURE__ */ o$8("span", { className: "shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400", children: progress.totalBatches > 1 ? `Batch ${progress.batchIndex + 1}/${progress.totalBatches} · ${progress.completed}/${progress.total}` : `${progress.completed}/${progress.total}` })
         ] }),
-        /* @__PURE__ */ o$8("div", { className: "w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700", children: /* @__PURE__ */ o$8("div", { className: "bg-blue-600 h-2.5 rounded-full", style: { width: `${progress.completed / progress.total * 100}%` } }) })
+        /* @__PURE__ */ o$8("div", { className: "w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700", children: /* @__PURE__ */ o$8(
+          "div",
+          {
+            className: "bg-blue-600 h-2.5 rounded-full",
+            style: { width: `${progress.total > 0 ? progress.completed / progress.total * 100 : 0}%` }
+          }
+        ) })
       ] }),
       /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f39c2d165cd861fe, { asChild: true, children: /* @__PURE__ */ o$8("button", { className: "IconButton CloseButton", "aria-label": "Close", children: /* @__PURE__ */ o$8(IconCross, {}) }) })
     ] });
