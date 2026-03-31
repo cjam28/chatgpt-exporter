@@ -76,5 +76,7 @@
   "Filter chip regular desc": "Chats without a custom GPT or project",
   "Filter chip active span": "⏱ Active ≥",
   "Filter chip active suffix": "d",
-  "Filters hint": "type # to add filters"
+  "Filters hint": "type # to add filters",
+  "Load more conversations": "Load {{n}} more",
+  "Load more conversations remaining": "Load {{n}} more · {{remaining}} left"
 }

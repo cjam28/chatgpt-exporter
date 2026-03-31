@@ -557,7 +557,20 @@ async function fetchProjectConversations(project: string, cursor: string | numbe
     }
 }
 
-export async function fetchAllConversations(project: string | null = null, maxConversations = 1000, onBatch?: (batch: ApiConversationItem[]) => void): Promise<ApiConversationItem[]> {
+/**
+ * Fetch a single page of conversations starting at `offset`.
+ * Useful for "load more" functionality in the UI — call this after the initial
+ * full load to append additional pages without re-fetching everything.
+ */
+export async function fetchConversationsPage(
+    project: string | null,
+    offset: number,
+    limit: number,
+): Promise<ApiConversations> {
+    return fetchConversations(offset, limit, project)
+}
+
+export async function fetchAllConversations(project: string | null = null, maxConversations = 1000, onBatch?: (batch: ApiConversationItem[]) => void, onHasMore?: (hasMore: boolean) => void): Promise<ApiConversationItem[]> {
     const conversations: ApiConversationItem[] = []
     const limit = project === null ? 100 : 50 // gizmos api uses a smaller limit
     let offset = 0
@@ -594,7 +607,10 @@ export async function fetchAllConversations(project: string | null = null, maxCo
         }
     }
     // Ensure we don't return more than the requested limit if the last batch pushed us over
-    return conversations.slice(0, maxConversations)
+    const result = conversations.slice(0, maxConversations)
+    // Let the caller know whether the fetch was cut off by the user limit vs the API having no more data
+    onHasMore?.(result.length >= maxConversations)
+    return result
 }
 
 /**
