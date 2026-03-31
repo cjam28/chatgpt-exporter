@@ -267,7 +267,7 @@ function matchFilterChip(
         }
         case 'project': {
             if (chip.projectIds.length === 0) break
-            raw = chip.projectIds.includes(c.gizmo_id)
+            raw = c.gizmo_id != null && chip.projectIds.includes(c.gizmo_id)
             break
         }
         case 'status': {
