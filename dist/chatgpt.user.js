@@ -1704,6 +1704,16 @@ html {
     });
     return success;
   }
+  class RateLimitError extends Error {
+    constructor(retryAfterHeader) {
+      super("Too Many Requests (429)");
+      /** Milliseconds to wait before retrying */
+      __publicField(this, "retryAfterMs");
+      this.name = "RateLimitError";
+      const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : Number.NaN;
+      this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1e3 : 3e4;
+    }
+  }
   async function fetchApi(url, options) {
     const accessToken = await getAccessToken();
     const accountId = await getTeamAccountId();
@@ -1717,6 +1727,9 @@ html {
       }
     });
     if (!response.ok) {
+      if (response.status === 429) {
+        throw new RateLimitError(response.headers.get("Retry-After"));
+      }
       throw new Error(response.statusText);
     }
     return response.json();
@@ -22250,6 +22263,9 @@ ${content2}`;
       });
     } };
   }
+  const MAX_RETRIES = 5;
+  const MAX_429_RETRIES = 8;
+  const MIN_429_BACKOFF_MS = 3e4;
   class RequestQueue {
     constructor(minBackoff, maxBackoff) {
       __publicField(this, "eventEmitter", EventEmitter());
@@ -22265,7 +22281,7 @@ ${content2}`;
       this.backoff = minBackoff;
     }
     add(requestObject) {
-      this.queue.push(requestObject);
+      this.queue.push({ ...requestObject, retries: 0, rateRetries: 0 });
     }
     start() {
       if (this.status === "IDLE") {
@@ -22300,6 +22316,7 @@ ${content2}`;
       this.status = "IN_PROGRESS";
       const requestObject = this.queue.shift();
       const { name, request } = requestObject;
+      let waitMs = this.backoff;
       try {
         this.progress(name, "processing");
         const result = await request();
@@ -22307,21 +22324,43 @@ ${content2}`;
         this.completed++;
         this.progress(name, "processing");
         this.backoff = this.minBackoff;
+        requestObject.retries = 0;
+        requestObject.rateRetries = 0;
       } catch (error2) {
-        console.error(`Request ${name} failed:`, error2);
-        this.progress(name, "retrying");
-        this.backoff = Math.min(this.backoff * this.backoffMultiplier, this.maxBackoff);
-        this.queue.unshift(requestObject);
+        if (error2 instanceof RateLimitError) {
+          requestObject.rateRetries++;
+          if (requestObject.rateRetries > MAX_429_RETRIES) {
+            console.warn(`[Exporter] "${name}" skipped after ${MAX_429_RETRIES} rate-limit retries`);
+            waitMs = 0;
+          } else {
+            waitMs = Math.max(error2.retryAfterMs, MIN_429_BACKOFF_MS);
+            this.progress(name, "rate_limited", Math.round(waitMs / 1e3));
+            this.queue.unshift(requestObject);
+          }
+        } else {
+          console.error(`[Exporter] "${name}" failed:`, error2);
+          requestObject.retries++;
+          if (requestObject.retries > MAX_RETRIES) {
+            console.warn(`[Exporter] "${name}" skipped after ${MAX_RETRIES} retries`);
+            waitMs = 0;
+          } else {
+            this.backoff = Math.min(this.backoff * this.backoffMultiplier, this.maxBackoff);
+            waitMs = this.backoff;
+            this.progress(name, "retrying");
+            this.queue.unshift(requestObject);
+          }
+        }
       }
-      await sleep(this.backoff);
+      await sleep(waitMs);
       this.process();
     }
-    progress(name, status) {
+    progress(name, status, rateLimitWaitSecs) {
       this.eventEmitter.emit("progress", {
         total: this.total,
         completed: this.completed,
         currentName: name,
-        currentStatus: status
+        currentStatus: status,
+        rateLimitWaitSecs
       });
     }
     done() {
@@ -23349,6 +23388,7 @@ ${content2}`;
       completed: 0,
       currentName: "",
       currentStatus: "",
+      rateLimitWaitSecs: void 0,
       batchIndex: 0,
       totalBatches: 0
     });
@@ -23385,6 +23425,7 @@ ${content2}`;
         setProcessing(true);
         setProgress({
           ...prog,
+          rateLimitWaitSecs: prog.rateLimitWaitSecs,
           batchIndex: batchIndexRef.current,
           totalBatches: totalBatchesRef.current,
           completed: batchIndexRef.current * EXPORT_OPERATION_BATCH + prog.completed,
@@ -23396,14 +23437,14 @@ ${content2}`;
     p$6(() => {
       const off = archiveQueue.on("progress", (prog) => {
         setProcessing(true);
-        setProgress({ ...prog, batchIndex: 0, totalBatches: 0 });
+        setProgress({ ...prog, rateLimitWaitSecs: prog.rateLimitWaitSecs, batchIndex: 0, totalBatches: 0 });
       });
       return () => off();
     }, [archiveQueue]);
     p$6(() => {
       const off = deleteQueue.on("progress", (prog) => {
         setProcessing(true);
-        setProgress({ ...prog, batchIndex: 0, totalBatches: 0 });
+        setProgress({ ...prog, rateLimitWaitSecs: prog.rateLimitWaitSecs, batchIndex: 0, totalBatches: 0 });
       });
       return () => off();
     }, [deleteQueue]);
@@ -23458,6 +23499,7 @@ ${content2}`;
         completed: 0,
         currentName: "",
         currentStatus: "processing",
+        rateLimitWaitSecs: void 0,
         batchIndex: 0,
         totalBatches: chunks.length
       });
@@ -23624,13 +23666,13 @@ ${content2}`;
       totalBatches > 1 && !processing && /* @__PURE__ */ o$8("p", { className: "mt-1.5 text-xs text-right text-gray-400 dark:text-gray-500", children: `${totalBatches} downloads · 100 conversations each` }),
       processing && /* @__PURE__ */ o$8(k$3, { children: [
         /* @__PURE__ */ o$8("div", { className: "mt-2 mb-1 justify-between flex items-center gap-2", children: [
-          /* @__PURE__ */ o$8("span", { className: "truncate text-sm text-gray-600 dark:text-gray-300", children: progress.currentName }),
+          /* @__PURE__ */ o$8("span", { className: "truncate text-sm text-gray-600 dark:text-gray-300", children: progress.currentStatus === "rate_limited" ? `⏳ Rate limited — waiting ${progress.rateLimitWaitSecs ?? "…"}s` : progress.currentName }),
           /* @__PURE__ */ o$8("span", { className: "shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400", children: progress.totalBatches > 1 ? `${t2("Batch progress").replace("{{current}}", String(progress.batchIndex + 1)).replace("{{total}}", String(progress.totalBatches))} · ${progress.completed}/${progress.total}` : `${progress.completed}/${progress.total}` })
         ] }),
         /* @__PURE__ */ o$8("div", { className: "w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700", children: /* @__PURE__ */ o$8(
           "div",
           {
-            className: "bg-blue-600 h-2.5 rounded-full",
+            className: `h-2.5 rounded-full ${progress.currentStatus === "rate_limited" ? "bg-amber-500" : "bg-blue-600"}`,
             style: { width: `${progress.total > 0 ? progress.completed / progress.total * 100 : 0}%` }
           }
         ) })
