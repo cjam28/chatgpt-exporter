@@ -958,7 +958,8 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         total: 0,
         completed: 0,
         currentName: '',
-        currentStatus: '',
+        currentStatus: '' as '' | 'processing' | 'retrying' | 'rate_limited',
+        rateLimitWaitSecs: undefined as number | undefined,
         batchIndex: 0,
         totalBatches: 0,
     })
@@ -999,6 +1000,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             setProcessing(true)
             setProgress({
                 ...prog,
+                rateLimitWaitSecs: prog.rateLimitWaitSecs,
                 batchIndex: batchIndexRef.current,
                 totalBatches: totalBatchesRef.current,
                 completed: batchIndexRef.current * EXPORT_OPERATION_BATCH + prog.completed,
@@ -1011,7 +1013,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     useEffect(() => {
         const off = archiveQueue.on('progress', (prog) => {
             setProcessing(true)
-            setProgress({ ...prog, batchIndex: 0, totalBatches: 0 })
+            setProgress({ ...prog, rateLimitWaitSecs: prog.rateLimitWaitSecs, batchIndex: 0, totalBatches: 0 })
         })
         return () => off()
     }, [archiveQueue])
@@ -1019,7 +1021,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     useEffect(() => {
         const off = deleteQueue.on('progress', (prog) => {
             setProcessing(true)
-            setProgress({ ...prog, batchIndex: 0, totalBatches: 0 })
+            setProgress({ ...prog, rateLimitWaitSecs: prog.rateLimitWaitSecs, batchIndex: 0, totalBatches: 0 })
         })
         return () => off()
     }, [deleteQueue])
@@ -1078,6 +1080,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             completed: 0,
             currentName: '',
             currentStatus: 'processing',
+            rateLimitWaitSecs: undefined,
             batchIndex: 0,
             totalBatches: chunks.length,
         })
@@ -1272,7 +1275,11 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             {processing && (
                 <>
                     <div className="mt-2 mb-1 justify-between flex items-center gap-2">
-                        <span className="truncate text-sm text-gray-600 dark:text-gray-300">{progress.currentName}</span>
+                        <span className="truncate text-sm text-gray-600 dark:text-gray-300">
+                            {progress.currentStatus === 'rate_limited'
+                                ? `⏳ Rate limited — waiting ${progress.rateLimitWaitSecs ?? '…'}s`
+                                : progress.currentName}
+                        </span>
                         <span className="shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400">
                             {progress.totalBatches > 1
                                 ? `${t('Batch progress').replace('{{current}}', String(progress.batchIndex + 1)).replace('{{total}}', String(progress.totalBatches))} \u00B7 ${progress.completed}/${progress.total}`
@@ -1281,7 +1288,7 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700">
                         <div
-                            className="bg-blue-600 h-2.5 rounded-full"
+                            className={`h-2.5 rounded-full ${progress.currentStatus === 'rate_limited' ? 'bg-amber-500' : 'bg-blue-600'}`}
                             style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
                         />
                     </div>

@@ -665,6 +665,22 @@ export async function deleteConversation(chatId: string): Promise<boolean> {
     return success
 }
 
+/**
+ * Thrown when the API responds with 429 Too Many Requests.
+ * Carries the wait time from the `Retry-After` header (or a safe default).
+ */
+export class RateLimitError extends Error {
+    /** Milliseconds to wait before retrying */
+    readonly retryAfterMs: number
+    constructor(retryAfterHeader: string | null) {
+        super('Too Many Requests (429)')
+        this.name = 'RateLimitError'
+        const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : Number.NaN
+        // Default to 30 s if the header is missing or unparseable
+        this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : 30_000
+    }
+}
+
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
     const accessToken = await getAccessToken()
     const accountId = await getTeamAccountId()
@@ -679,6 +695,9 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
         },
     })
     if (!response.ok) {
+        if (response.status === 429) {
+            throw new RateLimitError(response.headers.get('Retry-After'))
+        }
         throw new Error(response.statusText)
     }
     return response.json()
