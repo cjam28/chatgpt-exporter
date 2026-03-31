@@ -10070,8 +10070,48 @@ html {
       window.addEventListener("load", fn2);
     }
   }
+  const _WORKER_SRC = "onmessage=function(e){setTimeout(function(){postMessage(e.data)},e.data.ms)}";
+  let _sleepWorker = null;
+  let _sleepWorkerFailed = false;
+  const _pendingResolves = /* @__PURE__ */ new Map();
+  let _sleepIdCounter = 0;
+  function _getSleepWorker() {
+    if (_sleepWorkerFailed) return null;
+    if (_sleepWorker) return _sleepWorker;
+    try {
+      const blob = new Blob([_WORKER_SRC], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      const w2 = new Worker(url);
+      URL.revokeObjectURL(url);
+      w2.onmessage = (e2) => {
+        const resolve = _pendingResolves.get(e2.data.id);
+        if (resolve) {
+          _pendingResolves.delete(e2.data.id);
+          resolve();
+        }
+      };
+      w2.onerror = () => {
+        _sleepWorkerFailed = true;
+        _sleepWorker = null;
+        for (const resolve of _pendingResolves.values()) resolve();
+        _pendingResolves.clear();
+      };
+      _sleepWorker = w2;
+      return w2;
+    } catch {
+      _sleepWorkerFailed = true;
+      return null;
+    }
+  }
   function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    if (ms <= 0) return Promise.resolve();
+    const worker = _getSleepWorker();
+    if (!worker) return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => {
+      const id = _sleepIdCounter++;
+      _pendingResolves.set(id, resolve);
+      worker.postMessage({ id, ms });
+    });
   }
   function dateStr(date = /* @__PURE__ */ new Date()) {
     const year = date.getFullYear();
