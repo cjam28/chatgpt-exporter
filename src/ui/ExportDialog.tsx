@@ -967,6 +967,8 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     const pendingBatchesRef = useRef<ApiConversationItem[][]>([])
     const batchIndexRef = useRef(0)
     const totalBatchesRef = useRef(0)
+    /** Set to true when the user clicks Cancel — prevents the 'done' handler from starting the next batch */
+    const cancelledRef = useRef(false)
     /** Incremented on each new fetch; callbacks check this to discard stale results after remount */
     const fetchGenRef = useRef(0)
 
@@ -1028,6 +1030,13 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
 
     useEffect(() => {
         const off = requestQueue.on('done', async (results) => {
+            // If the user cancelled, just stop — don't download or start the next batch
+            if (cancelledRef.current) {
+                cancelledRef.current = false
+                setProcessing(false)
+                exportingRef.current = false
+                return
+            }
             const batchIdx = batchIndexRef.current
             const totalBatches = totalBatchesRef.current
             const partIndex = batchIdx + 1
@@ -1068,8 +1077,16 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         return () => off()
     }, [deleteQueue, selected, t])
 
+    const cancelExport = useCallback(() => {
+        cancelledRef.current = true
+        requestQueue.stop()
+        archiveQueue.stop()
+        deleteQueue.stop()
+    }, [requestQueue, archiveQueue, deleteQueue])
+
     const exportAllFromApi = useCallback(() => {
         if (disabled) return
+        cancelledRef.current = false
         const chunks = chunkArray(selected, EXPORT_OPERATION_BATCH)
         pendingBatchesRef.current = chunks
         batchIndexRef.current = 0
@@ -1345,14 +1362,36 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             )}
             {processing
                 ? (
-                    <button
-                        className="IconButton CloseButton"
-                        aria-label="Export in progress"
-                        title="Export is in progress — wait for it to finish before closing"
-                        style={{ cursor: 'not-allowed', opacity: 0.35 }}
-                    >
-                        <IconCross />
-                    </button>
+                    <>
+                        <button
+                            className="Button"
+                            style={{
+                                position: 'absolute',
+                                top: '12px',
+                                right: '40px',
+                                fontSize: '0.75rem',
+                                padding: '3px 10px',
+                                background: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                            }}
+                            title="Stop the export — any batches already downloaded are kept"
+                            onClick={cancelExport}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="IconButton CloseButton"
+                            aria-label="Export in progress"
+                            title="Click Cancel to stop the export"
+                            style={{ cursor: 'not-allowed', opacity: 0.25 }}
+                        >
+                            <IconCross />
+                        </button>
+                    </>
                     )
                 : (
                     <Dialog.Close asChild>

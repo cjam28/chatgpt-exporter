@@ -23463,6 +23463,7 @@ ${content2}`;
     const pendingBatchesRef = _([]);
     const batchIndexRef = _(0);
     const totalBatchesRef = _(0);
+    const cancelledRef = _(false);
     const fetchGenRef = _(0);
     const onUpload = T$4((e2) => {
       var _a, _b;
@@ -23519,6 +23520,12 @@ ${content2}`;
     p$6(() => {
       const off = requestQueue.on("done", async (results) => {
         var _a;
+        if (cancelledRef.current) {
+          cancelledRef.current = false;
+          setProcessing(false);
+          exportingRef.current = false;
+          return;
+        }
         const batchIdx = batchIndexRef.current;
         const totalBatches2 = totalBatchesRef.current;
         const partIndex = batchIdx + 1;
@@ -23555,8 +23562,15 @@ ${content2}`;
       });
       return () => off();
     }, [deleteQueue, selected, t2]);
+    const cancelExport = T$4(() => {
+      cancelledRef.current = true;
+      requestQueue.stop();
+      archiveQueue.stop();
+      deleteQueue.stop();
+    }, [requestQueue, archiveQueue, deleteQueue]);
     const exportAllFromApi = T$4(() => {
       if (disabled) return;
+      cancelledRef.current = false;
       const chunks = chunkArray(selected, EXPORT_OPERATION_BATCH);
       pendingBatchesRef.current = chunks;
       batchIndexRef.current = 0;
@@ -23777,16 +23791,40 @@ ${content2}`;
           }
         ) })
       ] }),
-      processing ? /* @__PURE__ */ o$8(
-        "button",
-        {
-          className: "IconButton CloseButton",
-          "aria-label": "Export in progress",
-          title: "Export is in progress — wait for it to finish before closing",
-          style: { cursor: "not-allowed", opacity: 0.35 },
-          children: /* @__PURE__ */ o$8(IconCross, {})
-        }
-      ) : /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f39c2d165cd861fe, { asChild: true, children: /* @__PURE__ */ o$8("button", { className: "IconButton CloseButton", "aria-label": "Close", children: /* @__PURE__ */ o$8(IconCross, {}) }) })
+      processing ? /* @__PURE__ */ o$8(k$3, { children: [
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: "Button",
+            style: {
+              position: "absolute",
+              top: "12px",
+              right: "40px",
+              fontSize: "0.75rem",
+              padding: "3px 10px",
+              background: "#ef4444",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: 600
+            },
+            title: "Stop the export — any batches already downloaded are kept",
+            onClick: cancelExport,
+            children: "Cancel"
+          }
+        ),
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: "IconButton CloseButton",
+            "aria-label": "Export in progress",
+            title: "Click Cancel to stop the export",
+            style: { cursor: "not-allowed", opacity: 0.25 },
+            children: /* @__PURE__ */ o$8(IconCross, {})
+          }
+        )
+      ] }) : /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f39c2d165cd861fe, { asChild: true, children: /* @__PURE__ */ o$8("button", { className: "IconButton CloseButton", "aria-label": "Close", children: /* @__PURE__ */ o$8(IconCross, {}) }) })
     ] });
   };
   const ExportDialog = ({ format, open, onOpenChange, children }) => {
