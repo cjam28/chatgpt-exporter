@@ -650,11 +650,15 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                     className="Button green"
                     disabled={disabled}
                     onClick={exportAll}
-                    title={totalBatches > 1 ? `${totalBatches} separate downloads, 100 conversations each` : undefined}
                 >
-                    {totalBatches > 1 ? `${t('Export')} \u00B7\u00A0${totalBatches}\u00A0files` : t('Export')}
+                    {t('Export')}
                 </button>
             </div>
+            {totalBatches > 1 && !processing && (
+                <p className="mt-1.5 text-xs text-right text-gray-400 dark:text-gray-500">
+                    {`${totalBatches} downloads \u00B7 100 conversations each`}
+                </p>
+            )}
             {processing && (
                 <>
                     <div className="mt-2 mb-1 justify-between flex items-center gap-2">

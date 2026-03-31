@@ -22691,11 +22691,11 @@ ${content2}`;
             className: "Button green",
             disabled,
             onClick: exportAll,
-            title: totalBatches > 1 ? `${totalBatches} separate downloads, 100 conversations each` : void 0,
-            children: totalBatches > 1 ? `${t2("Export")} · ${totalBatches} files` : t2("Export")
+            children: t2("Export")
           }
         )
       ] }),
+      totalBatches > 1 && !processing && /* @__PURE__ */ o$8("p", { className: "mt-1.5 text-xs text-right text-gray-400 dark:text-gray-500", children: `${totalBatches} downloads · 100 conversations each` }),
       processing && /* @__PURE__ */ o$8(k$3, { children: [
         /* @__PURE__ */ o$8("div", { className: "mt-2 mb-1 justify-between flex items-center gap-2", children: [
           /* @__PURE__ */ o$8("span", { className: "truncate text-sm text-gray-600 dark:text-gray-300", children: progress.currentName }),
