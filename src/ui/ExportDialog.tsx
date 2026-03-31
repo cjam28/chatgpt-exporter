@@ -72,42 +72,221 @@ function textSearch(title: string, query: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Filter chip system
+// Filter chip system types & constants
 // ---------------------------------------------------------------------------
 
+/** Sentinel string used to encode a null origin value in picker selection arrays */
+const NULL_ORIGIN_ID = '__web_app__'
+
+type DateFilterField = 'create_time' | 'update_time'
 type ChipMode = 'include' | 'exclude'
 
+/** Which "page" the picker popover is on */
+type PickerView = 'root' | 'chat_class' | 'origin' | 'project' | 'status'
+
+/**
+ * Each chip is one filter constraint.
+ * Multi-value chips (chat_class, origin, project, status) accept arrays of values
+ * and match if ANY value matches (OR within chip, AND/OR across chips).
+ * The `date` chip is always AND-combined with everything else.
+ */
 type FilterChipDef =
-    | { type: 'chat_class'; value: 'regular' | 'gpt' | 'project'; mode: ChipMode }
-    | { type: 'origin'; value: string | null; label: string; mode: ChipMode }
-    | { type: 'status'; value: 'starred' | 'temporary' | 'pinned'; mode: ChipMode }
+    | { type: 'chat_class'; values: ('regular' | 'gpt' | 'project')[]; mode: ChipMode }
+    | { type: 'origin'; values: (string | null)[]; mode: ChipMode }
+    | { type: 'project'; projectIds: string[]; mode: ChipMode }
+    | { type: 'status'; values: ('starred' | 'temporary' | 'pinned')[]; mode: ChipMode }
     | { type: 'duration_gte'; days: number; mode: ChipMode }
     | { type: 'recency_lte'; days: number; mode: ChipMode }
+    | { type: 'date'; field: DateFilterField; from: string; to: string }
 
+/** Static sub-options for the Chat class picker stage */
+const CHAT_CLASS_SUB_OPTIONS = [
+    { id: 'regular', label: '💬 Regular', desc: 'Standard chats with no GPT or Project' },
+    { id: 'gpt', label: '🤖 GPT', desc: 'Used a GPT Store AI' },
+    { id: 'project', label: '📂 Project', desc: 'Any conversation in a Project' },
+]
+
+/** Static sub-options for the Status picker stage */
+const STATUS_SUB_OPTIONS = [
+    { id: 'starred', label: '⭐ Starred', desc: 'Starred conversations' },
+    { id: 'temporary', label: '💬 Temporary', desc: 'Temporary chats not saved to history' },
+    { id: 'pinned', label: '📌 Pinned', desc: 'Pinned conversations' },
+]
+
+/** Date chip preset definitions */
+const DATE_PRESETS = [
+    { days: 7, label: '7d' },
+    { days: 30, label: '30d' },
+    { days: 90, label: '90d' },
+    { days: 365, label: 'Year' },
+]
+
+/** Root picker entries — each becomes one chip type */
+const ROOT_PICKER_ITEMS = [
+    { id: 'chat_class' as const, label: '💬 Chat class', desc: 'Regular, GPT, or Project chats', hasSubView: true },
+    { id: 'origin' as const, label: '🌐 Origin', desc: 'How the conversation was started', hasSubView: true },
+    { id: 'project' as const, label: '📂 Project', desc: 'Filter by specific project', hasSubView: true },
+    { id: 'status' as const, label: '⭐ Status', desc: 'Starred, Temporary, or Pinned', hasSubView: true },
+    { id: 'duration_gte' as const, label: '⏱ Duration', desc: 'Long conversation (≥ N days)', hasSubView: false },
+    { id: 'recency_lte' as const, label: '📅 Recency', desc: 'Recently updated (< N days)', hasSubView: false },
+    { id: 'date' as const, label: '📅 Date range', desc: 'Filter by created or updated date', hasSubView: false },
+]
+
+// ---------------------------------------------------------------------------
+// Filter chip helpers
+// ---------------------------------------------------------------------------
+
+/** Only one chip of each type is allowed */
 function isChipDuplicate(chips: FilterChipDef[], candidate: FilterChipDef): boolean {
-    return chips.some((c) => {
-        if (c.type !== candidate.type) return false
-        if (c.type === 'duration_gte' || c.type === 'recency_lte') return true
-        if (c.type === 'chat_class' && candidate.type === 'chat_class') return c.value === candidate.value
-        if (c.type === 'origin' && candidate.type === 'origin') return c.value === candidate.value
-        if (c.type === 'status' && candidate.type === 'status') return c.value === candidate.value
-        return false
-    })
+    return chips.some(c => c.type === candidate.type)
 }
 
-/** Returns a display label, or null for chips that render their own inline content */
-function chipDisplayLabel(chip: FilterChipDef): string | null {
+/** Return the picker selection IDs (encoded strings) for an existing chip */
+function getChipEncodedSelections(chip: FilterChipDef): string[] {
     switch (chip.type) {
+        case 'chat_class': return chip.values
+        case 'origin': return chip.values.map(v => v === null ? NULL_ORIGIN_ID : v)
+        case 'project': return chip.projectIds
+        case 'status': return chip.values
+        default: return []
+    }
+}
+
+/** Build a chip from the picker sub-view state (after user selects values) */
+function makeChipFromPickerState(
+    view: Exclude<PickerView, 'root'>,
+    selections: string[],
+    mode: ChipMode,
+): FilterChipDef {
+    switch (view) {
         case 'chat_class':
-            return chip.value === 'regular' ? '💬 Regular' : chip.value === 'gpt' ? '🤖 GPT' : '📂 Project'
+            return { type: 'chat_class', values: selections as ('regular' | 'gpt' | 'project')[], mode }
         case 'origin':
-            return `🌐 ${chip.label}`
+            return { type: 'origin', values: selections.map(s => s === NULL_ORIGIN_ID ? null : s), mode }
+        case 'project':
+            return { type: 'project', projectIds: selections, mode }
         case 'status':
-            return chip.value === 'starred' ? '⭐ Starred' : chip.value === 'temporary' ? '💬 Temporary' : '📌 Pinned'
-        case 'duration_gte':
-        case 'recency_lte':
+            return { type: 'status', values: selections as ('starred' | 'temporary' | 'pinned')[], mode }
+    }
+}
+
+/** Human-readable summary of a chip's selected values (shown in chip bar) */
+function getChipValueLabel(chip: FilterChipDef, projects: ApiProjectInfo[]): string | null {
+    switch (chip.type) {
+        case 'chat_class': {
+            if (chip.values.length === 0) return 'none'
+            if (chip.values.length === 3) return 'all types'
+            const lbl: Record<string, string> = { regular: '💬 Regular', gpt: '🤖 GPT', project: '📂 Project' }
+            return chip.values.map(v => lbl[v]).join(', ')
+        }
+        case 'origin': {
+            if (chip.values.length === 0) return 'none'
+            return chip.values
+                .map(v => v === null ? 'Web/App' : v.charAt(0).toUpperCase() + v.slice(1))
+                .join(', ')
+        }
+        case 'project': {
+            if (chip.projectIds.length === 0) return 'any project'
+            return chip.projectIds
+                .map(id => projects.find(p => p.id === id)?.display.name ?? id.slice(0, 8))
+                .join(', ')
+        }
+        case 'status': {
+            if (chip.values.length === 0) return 'none'
+            const lbl: Record<string, string> = { starred: '⭐ Starred', temporary: '💬 Temp', pinned: '📌 Pinned' }
+            return chip.values.map(v => lbl[v]).join(', ')
+        }
+        default:
             return null
     }
+}
+
+/** Short prefix label shown before the value in a multi-select chip */
+function getChipTypePrefix(type: FilterChipDef['type']): string {
+    if (type === 'chat_class') return '💬 Chat'
+    if (type === 'origin') return '🌐 Origin'
+    if (type === 'project') return '📂 Project'
+    if (type === 'status') return '⭐ Status'
+    return ''
+}
+
+/** Heading text for the picker's sub-view back button */
+function getPickerViewTitle(view: PickerView): string {
+    if (view === 'chat_class') return 'Chat class'
+    if (view === 'origin') return 'Origin'
+    if (view === 'project') return 'Project'
+    if (view === 'status') return 'Status'
+    return ''
+}
+
+// ---------------------------------------------------------------------------
+// Filtering logic
+// ---------------------------------------------------------------------------
+
+function matchDateChip(
+    c: ApiConversationItem,
+    chip: Extract<FilterChipDef, { type: 'date' }>,
+): boolean {
+    if (chip.from) {
+        const fromMs = new Date(chip.from).getTime()
+        if (!Number.isNaN(fromMs) && toMs(c[chip.field]) < fromMs) return false
+    }
+    if (chip.to) {
+        const toEndMs = new Date(`${chip.to}T23:59:59.999`).getTime()
+        if (!Number.isNaN(toEndMs) && toMs(c[chip.field]) > toEndMs) return false
+    }
+    return true
+}
+
+function matchFilterChip(
+    c: ApiConversationItem,
+    chip: Exclude<FilterChipDef, { type: 'date' }>,
+    projectIdSet: Set<string>,
+): boolean {
+    let raw = true
+    switch (chip.type) {
+        case 'chat_class': {
+            if (chip.values.length === 0) break
+            const gizmoId = c.gizmo_id ?? null
+            const isProject = gizmoId !== null && projectIdSet.has(gizmoId)
+            const isGpt = gizmoId !== null && !isProject
+            raw = chip.values.some((v) => {
+                if (v === 'regular') return gizmoId === null
+                if (v === 'project') return isProject
+                return isGpt
+            })
+            break
+        }
+        case 'origin': {
+            if (chip.values.length === 0) break
+            raw = chip.values.some((v) => {
+                if (v === null) return (c.conversation_origin ?? null) === null
+                return c.conversation_origin === v
+            })
+            break
+        }
+        case 'project': {
+            if (chip.projectIds.length === 0) break
+            raw = chip.projectIds.includes(c.gizmo_id)
+            break
+        }
+        case 'status': {
+            if (chip.values.length === 0) break
+            raw = chip.values.some((v) => {
+                if (v === 'starred') return c.is_starred === true
+                if (v === 'temporary') return c.is_temporary_chat === true
+                return c.pinned_time != null
+            })
+            break
+        }
+        case 'duration_gte':
+            raw = toMs(c.update_time) - toMs(c.create_time) >= chip.days * 86_400_000
+            break
+        case 'recency_lte':
+            raw = Date.now() - toMs(c.update_time) <= chip.days * 86_400_000
+            break
+    }
+    return chip.mode === 'include' ? raw : !raw
 }
 
 function applyChips(
@@ -118,163 +297,15 @@ function applyChips(
 ): ApiConversationItem[] {
     if (chips.length === 0) return conversations
     const projectIdSet = new Set(projects.map(p => p.id))
-
-    function matchSingle(c: ApiConversationItem, chip: FilterChipDef): boolean {
-        let raw: boolean
-        switch (chip.type) {
-            case 'chat_class': {
-                const gizmoId = c.gizmo_id ?? null
-                const isProject = gizmoId !== null && projectIdSet.has(gizmoId)
-                const isGpt = gizmoId !== null && !isProject
-                if (chip.value === 'regular') raw = gizmoId === null
-                else if (chip.value === 'project') raw = isProject
-                else raw = isGpt
-                break
-            }
-            case 'origin':
-                raw = chip.value === null
-                    ? (c.conversation_origin ?? null) === null
-                    : c.conversation_origin === chip.value
-                break
-            case 'status':
-                if (chip.value === 'starred') raw = c.is_starred === true
-                else if (chip.value === 'temporary') raw = c.is_temporary_chat === true
-                else raw = c.pinned_time != null
-                break
-            case 'duration_gte':
-                raw = toMs(c.update_time) - toMs(c.create_time) >= chip.days * 86_400_000
-                break
-            case 'recency_lte':
-                raw = Date.now() - toMs(c.update_time) <= chip.days * 86_400_000
-                break
-            default:
-                raw = true
-        }
-        return chip.mode === 'include' ? raw : !raw
-    }
-
+    type NonDate = Exclude<FilterChipDef, { type: 'date' }>
+    const dateChip = chips.find((c): c is Extract<FilterChipDef, { type: 'date' }> => c.type === 'date')
+    const other = chips.filter((c): c is NonDate => c.type !== 'date')
+    let result = conversations
+    if (dateChip) result = result.filter(c => matchDateChip(c, dateChip))
+    if (other.length === 0) return result
     return logic === 'AND'
-        ? conversations.filter(c => chips.every(chip => matchSingle(c, chip)))
-        : conversations.filter(c => chips.some(chip => matchSingle(c, chip)))
-}
-
-// ---------------------------------------------------------------------------
-// Picker option types
-// ---------------------------------------------------------------------------
-
-interface PickerOption {
-    id: string
-    label: string
-    desc: string
-    make: () => FilterChipDef
-}
-
-interface PickerGroup {
-    group: string
-    options: PickerOption[]
-}
-
-// ---------------------------------------------------------------------------
-// DateFilter component
-// ---------------------------------------------------------------------------
-
-type DateFilterField = 'create_time' | 'update_time'
-
-interface DateFilterProps {
-    dateFrom: string
-    dateTo: string
-    filterField: DateFilterField
-    setDateFrom: (v: string) => void
-    setDateTo: (v: string) => void
-    setFilterField: (v: DateFilterField) => void
-    disabled: boolean
-}
-
-const DateFilter: FC<DateFilterProps> = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
-    const { t } = useTranslation()
-
-    const todayStr = () => new Date().toISOString().slice(0, 10)
-    const daysAgoStr = (n: number) => {
-        const d = new Date()
-        d.setDate(d.getDate() - n)
-        return d.toISOString().slice(0, 10)
-    }
-    const thisYearStr = () => `${new Date().getFullYear()}-01-01`
-
-    const presets = [
-        { key: 'Date Preset 7d', from: () => daysAgoStr(7), to: todayStr },
-        { key: 'Date Preset 30d', from: () => daysAgoStr(30), to: todayStr },
-        { key: 'Date Preset 90d', from: () => daysAgoStr(90), to: todayStr },
-        { key: 'Date Preset Year', from: thisYearStr, to: todayStr },
-    ] as const
-
-    const hasFilter = !!(dateFrom || dateTo)
-
-    return (
-        <div className="mb-3 text-sm text-gray-600 dark:text-gray-300">
-            <div className="flex items-center gap-2 mb-1.5">
-                <span className="shrink-0 font-medium" title={t('Date Filter Hint')}>{t('Date Filter Label')}</span>
-                <select
-                    className="Select"
-                    value={filterField}
-                    disabled={disabled}
-                    onChange={e => setFilterField(e.currentTarget.value as DateFilterField)}
-                    style={{ minWidth: '5.5rem' }}
-                >
-                    <option value="create_time">{t('Date Filter Field Created')}</option>
-                    <option value="update_time">{t('Date Filter Field Updated')}</option>
-                </select>
-                <div className="flex items-center gap-1 ml-auto flex-wrap">
-                    {presets.map(p => (
-                        <button
-                            key={p.key}
-                            className="Button neutral"
-                            style={{ padding: '2px 7px', fontSize: '0.75rem' }}
-                            disabled={disabled}
-                            onClick={() => {
-                                setDateFrom(p.from())
-                                setDateTo(p.to())
-                            }}
-                        >
-                            {t(p.key)}
-                        </button>
-                    ))}
-                    {hasFilter && (
-                        <button
-                            className="Button neutral"
-                            style={{ padding: '2px 7px', fontSize: '0.75rem' }}
-                            disabled={disabled}
-                            onClick={() => {
-                                setDateFrom('')
-                                setDateTo('')
-                            }}
-                        >
-                            {t('Clear filter')}
-                        </button>
-                    )}
-                </div>
-            </div>
-            <div className="flex items-center gap-2">
-                <input
-                    type="date"
-                    className="Input"
-                    value={dateFrom}
-                    disabled={disabled}
-                    onChange={e => setDateFrom(e.currentTarget.value)}
-                    style={{ flex: 1, minWidth: 0 }}
-                />
-                <span className="shrink-0 text-gray-400">–</span>
-                <input
-                    type="date"
-                    className="Input"
-                    value={dateTo}
-                    disabled={disabled}
-                    onChange={e => setDateTo(e.currentTarget.value)}
-                    style={{ flex: 1, minWidth: 0 }}
-                />
-            </div>
-        </div>
-    )
+        ? result.filter(c => other.every(chip => matchFilterChip(c, chip, projectIdSet)))
+        : result.filter(c => other.some(chip => matchFilterChip(c, chip, projectIdSet)))
 }
 
 // ---------------------------------------------------------------------------
@@ -289,9 +320,6 @@ interface ConversationSelectProps {
     disabled: boolean
     loading: boolean
     error: string
-    dateFrom: string
-    dateTo: string
-    filterField: DateFilterField
 }
 
 const ConversationSelect: FC<ConversationSelectProps> = ({
@@ -302,140 +330,76 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     disabled,
     loading,
     error,
-    dateFrom,
-    dateTo,
-    filterField,
 }) => {
     const { t } = useTranslation()
     const [query, setQuery] = useState('')
     const [chips, setChips] = useState<FilterChipDef[]>([])
     const [chipLogic, setChipLogic] = useState<'AND' | 'OR'>('AND')
     const [showPopover, setShowPopover] = useState(false)
+    const [pickerView, setPickerView] = useState<PickerView>('root')
+    const [pickerSelections, setPickerSelections] = useState<string[]>([])
+    const [editingChipIndex, setEditingChipIndex] = useState<number | null>(null)
     const lastClickedIndex = useRef<number>(-1)
+    const searchInputRef = useRef<HTMLInputElement>(null)
+    /** Set to true before clicking a chip-edit button to prevent blur from closing the picker */
+    const skipNextBlur = useRef(false)
 
-    // Build picker groups dynamically — Origin values come from loaded conversations
-    const pickerGroups = useMemo<PickerGroup[]>(() => {
-        const originMap = new Map<string | null, string>()
+    // ── Dynamic sub-options ──
+
+    /** Origin values discovered from loaded conversations */
+    const originSubOptions = useMemo(() => {
+        const map = new Map<string, string>()
         for (const c of conversations) {
             const val = c.conversation_origin ?? null
-            if (!originMap.has(val)) {
-                const label = val === null ? t('Chip origin web label').replace('🌐 ', '') : val.charAt(0).toUpperCase() + val.slice(1)
-                originMap.set(val, label)
+            const id = val === null ? NULL_ORIGIN_ID : val
+            if (!map.has(id)) {
+                const label = val === null ? 'Web / App' : val.charAt(0).toUpperCase() + val.slice(1)
+                map.set(id, label)
             }
         }
+        return [...map.entries()].map(([id, label]) => ({
+            id,
+            label: `🌐 ${label}`,
+            desc: id === NULL_ORIGIN_ID ? 'Web app or mobile app' : `Started via ${label}`,
+        }))
+    }, [conversations])
 
-        return [
-            {
-                group: t('Chip group chat class'),
-                options: [
-                    {
-                        id: 'cc_regular',
-                        label: t('Chip cc regular label'),
-                        desc: t('Chip cc regular desc'),
-                        make: () => ({ type: 'chat_class' as const, value: 'regular' as const, mode: 'include' as const }),
-                    },
-                    {
-                        id: 'cc_gpt',
-                        label: t('Chip cc gpt label'),
-                        desc: t('Chip cc gpt desc'),
-                        make: () => ({ type: 'chat_class' as const, value: 'gpt' as const, mode: 'include' as const }),
-                    },
-                    {
-                        id: 'cc_project',
-                        label: t('Chip cc project label'),
-                        desc: t('Chip cc project desc'),
-                        make: () => ({ type: 'chat_class' as const, value: 'project' as const, mode: 'include' as const }),
-                    },
-                ],
-            },
-            {
-                group: t('Chip group origin'),
-                options: [...originMap.entries()].map(([val, label]) => ({
-                    id: `orig_${val ?? 'null'}`,
-                    label: `\u{1F310} ${label}`,
-                    desc: val === null ? t('Chip origin web desc') : `Started via ${label}`,
-                    make: () => ({ type: 'origin' as const, value: val, label, mode: 'include' as const }),
-                })),
-            },
-            {
-                group: t('Chip group status'),
-                options: [
-                    {
-                        id: 'st_starred',
-                        label: t('Chip status starred label'),
-                        desc: t('Chip status starred desc'),
-                        make: () => ({ type: 'status' as const, value: 'starred' as const, mode: 'include' as const }),
-                    },
-                    {
-                        id: 'st_temp',
-                        label: t('Chip status temporary label'),
-                        desc: t('Chip status temporary desc'),
-                        make: () => ({ type: 'status' as const, value: 'temporary' as const, mode: 'include' as const }),
-                    },
-                    {
-                        id: 'st_pinned',
-                        label: t('Chip status pinned label'),
-                        desc: t('Chip status pinned desc'),
-                        make: () => ({ type: 'status' as const, value: 'pinned' as const, mode: 'include' as const }),
-                    },
-                ],
-            },
-            {
-                group: t('Chip group duration'),
-                options: [
-                    {
-                        id: 'dur',
-                        label: t('Chip duration label'),
-                        desc: t('Chip duration desc'),
-                        make: () => ({ type: 'duration_gte' as const, days: 7, mode: 'include' as const }),
-                    },
-                ],
-            },
-            {
-                group: t('Chip group recency'),
-                options: [
-                    {
-                        id: 'rec',
-                        label: t('Chip recency label'),
-                        desc: t('Chip recency desc'),
-                        make: () => ({ type: 'recency_lte' as const, days: 30, mode: 'include' as const }),
-                    },
-                ],
-            },
-        ]
-    }, [conversations, t])
-
-    const availableGroups = useMemo(
-        () => pickerGroups
-            .map(g => ({ ...g, options: g.options.filter(opt => !isChipDuplicate(chips, opt.make())) }))
-            .filter(g => g.options.length > 0),
-        [pickerGroups, chips],
+    /** Project names from the fetched project list */
+    const projectSubOptions = useMemo(
+        () => projects.map(p => ({ id: p.id, label: `📂 ${p.display.name}`, desc: '' })),
+        [projects],
     )
+
+    /** Sub-options for the currently active picker stage */
+    const currentSubOptions = useMemo(() => {
+        if (pickerView === 'chat_class') return CHAT_CLASS_SUB_OPTIONS
+        if (pickerView === 'origin') return originSubOptions
+        if (pickerView === 'project') return projectSubOptions
+        if (pickerView === 'status') return STATUS_SUB_OPTIONS
+        return []
+    }, [pickerView, originSubOptions, projectSubOptions])
+
+    /** Root options filtered to hide chip types already added */
+    const rootOptions = useMemo(
+        () => ROOT_PICKER_ITEMS.filter(opt => !chips.some(c => c.type === opt.id)),
+        [chips],
+    )
+
+    // ── Filtering ──
 
     const filtered = useMemo(() => {
         let result = conversations
         const q = query.trim().replace(/#$/, '').trim()
         if (q) result = result.filter(c => textSearch(c.title, q))
-        if (dateFrom) {
-            const fromMs = new Date(dateFrom).getTime()
-            if (!Number.isNaN(fromMs)) result = result.filter(c => toMs(c[filterField]) >= fromMs)
-        }
-        if (dateTo) {
-            const toEndMs = new Date(`${dateTo}T23:59:59.999`).getTime()
-            if (!Number.isNaN(toEndMs)) result = result.filter(c => toMs(c[filterField]) <= toEndMs)
-        }
         return applyChips(result, chips, chipLogic, projects)
-    }, [conversations, query, dateFrom, dateTo, filterField, chips, chipLogic, projects])
+    }, [conversations, query, chips, chipLogic, projects])
 
     const allFilteredSelected = filtered.length > 0 && filtered.every(c => selected.some(x => x.id === c.id))
 
-    const addChip = useCallback((chip: FilterChipDef) => {
-        if (isChipDuplicate(chips, chip)) return
-        setChips(prev => [...prev, chip])
-        setQuery(q => q.endsWith('#') ? q.slice(0, -1) : q)
-        lastClickedIndex.current = -1
-        setShowPopover(false)
-    }, [chips])
+    /** Chips that participate in AND/OR logic (excludes the date chip) */
+    const nonDateChips = useMemo(() => chips.filter(c => c.type !== 'date'), [chips])
+
+    // ── Chip callbacks ──
 
     const updateChip = useCallback((index: number, updated: FilterChipDef) => {
         setChips(prev => prev.map((c, i) => i === index ? updated : c))
@@ -446,15 +410,134 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     }, [])
 
     const toggleChipMode = useCallback((index: number) => {
-        setChips(prev => prev.map((c, i) => i === index ? { ...c, mode: c.mode === 'include' ? 'exclude' : 'include' } as FilterChipDef : c))
+        setChips(prev => prev.map((c, i) => {
+            if (i !== index || c.type === 'date') return c
+            return { ...c, mode: c.mode === 'include' ? 'exclude' : 'include' } as FilterChipDef
+        }))
     }, [])
+
+    // ── Date chip helpers ──
+
+    const dateChip = useMemo(
+        () => chips.find((c): c is Extract<FilterChipDef, { type: 'date' }> => c.type === 'date'),
+        [chips],
+    )
+
+    const updateDateChip = useCallback((updates: Partial<{ field: DateFilterField; from: string; to: string }>) => {
+        setChips(prev => prev.map((c) => {
+            if (c.type !== 'date') return c
+            return { ...c, ...updates }
+        }))
+    }, [])
+
+    const setDatePreset = useCallback((days: number) => {
+        const d = new Date()
+        const from = new Date(d.getTime() - days * 86_400_000).toISOString().slice(0, 10)
+        const to = d.toISOString().slice(0, 10)
+        setChips(prev => prev.map((c) => {
+            if (c.type !== 'date') return c
+            return { ...c, from, to }
+        }))
+    }, [])
+
+    const removeDateChip = useCallback(() => {
+        setChips(prev => prev.filter(c => c.type !== 'date'))
+    }, [])
+
+    // ── Picker callbacks ──
+
+    const closePicker = useCallback(() => {
+        setShowPopover(false)
+        setPickerView('root')
+        setPickerSelections([])
+        setEditingChipIndex(null)
+    }, [])
+
+    const togglePickerSelection = useCallback((id: string) => {
+        setPickerSelections(prev =>
+            prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id],
+        )
+    }, [])
+
+    const applyPickerSelections = useCallback(() => {
+        if (pickerView === 'root') return
+        let mode: ChipMode = 'include'
+        if (editingChipIndex !== null) {
+            const existing = chips[editingChipIndex]
+            if (existing && existing.type !== 'date') mode = existing.mode
+        }
+        const newChip = makeChipFromPickerState(pickerView, pickerSelections, mode)
+        if (editingChipIndex !== null) {
+            updateChip(editingChipIndex, newChip)
+        }
+        else if (!isChipDuplicate(chips, newChip)) {
+            setChips(prev => [...prev, newChip])
+        }
+        setQuery(q => q.endsWith('#') ? q.slice(0, -1) : q)
+        closePicker()
+    }, [pickerView, pickerSelections, editingChipIndex, chips, updateChip, closePicker])
+
+    /**
+     * Open the picker sub-view for an existing chip, pre-populated with its current values.
+     * Call `searchInputRef.current?.focus()` after to keep the input focused.
+     */
+    const openPickerForEdit = useCallback((index: number) => {
+        const chip = chips[index]
+        if (!chip) return
+        if (chip.type === 'date' || chip.type === 'duration_gte' || chip.type === 'recency_lte') return
+        setPickerSelections(getChipEncodedSelections(chip))
+        setPickerView(chip.type as Exclude<PickerView, 'root'>)
+        setEditingChipIndex(index)
+        setShowPopover(true)
+    }, [chips])
+
+    /** Add a simple chip (no sub-view required) directly from the root picker */
+    const addImmediateChip = useCallback((type: 'duration_gte' | 'recency_lte' | 'date') => {
+        let chip: FilterChipDef
+        if (type === 'duration_gte') {
+            chip = { type: 'duration_gte', days: 7, mode: 'include' }
+        }
+        else if (type === 'recency_lte') {
+            chip = { type: 'recency_lte', days: 30, mode: 'include' }
+        }
+        else {
+            chip = { type: 'date', field: 'create_time', from: '', to: '' }
+        }
+        if (!isChipDuplicate(chips, chip)) {
+            setChips(prev => [...prev, chip])
+        }
+        setQuery(q => q.endsWith('#') ? q.slice(0, -1) : q)
+        closePicker()
+    }, [chips, closePicker])
+
+    const handleSearchBlur = useCallback(() => {
+        setTimeout(() => {
+            if (skipNextBlur.current) {
+                skipNextBlur.current = false
+                return
+            }
+            closePicker()
+        }, 200)
+    }, [closePicker])
+
+    /** Back button in picker sub-view: cancel edit or return to root */
+    const handlePickerBack = useCallback(() => {
+        if (editingChipIndex !== null) {
+            closePicker()
+        }
+        else {
+            setPickerView('root')
+            setPickerSelections([])
+        }
+    }, [editingChipIndex, closePicker])
 
     return (
         <>
-            {/* Active filter chips bar */}
+            {/* ── Chip bar ── */}
             {chips.length > 0 && (
                 <div className="SelectChips">
-                    {chips.length > 1 && (
+                    {/* AND / OR toggle — shown when ≥2 non-date chips */}
+                    {nonDateChips.length > 1 && (
                         <button
                             className={`SelectChipLogic${chipLogic === 'OR' ? ' SelectChipLogicOr' : ''}`}
                             title="Toggle AND / OR logic between filters"
@@ -463,53 +546,154 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                             {chipLogic === 'AND' ? t('Chip logic and') : t('Chip logic or')}
                         </button>
                     )}
+
                     {chips.map((chip, i) => {
-                        const label = chipDisplayLabel(chip)
+                        if (chip.type === 'date') return null
                         const isExclude = chip.mode === 'exclude'
+                        const chipClass = `SelectChip${isExclude ? ' SelectChipExclude' : ''}`
+                        const modeClass = `SelectChipMode${isExclude ? ' SelectChipModeExclude' : ''}`
+                        const modeLabel = isExclude ? t('Chip mode exclude') : t('Chip mode include')
+
+                        if (chip.type === 'duration_gte') {
+                            return (
+                                <span key={i} className={chipClass}>
+                                    {t('Chip duration prefix')}&nbsp;
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={chip.days}
+                                        onChange={e => updateChip(i, {
+                                            type: 'duration_gte',
+                                            days: Math.max(1, Number(e.currentTarget.value)),
+                                            mode: chip.mode,
+                                        })}
+                                    />
+                                    {t('Chip duration suffix')}
+                                    <button
+                                        className={modeClass}
+                                        title="Toggle include/exclude"
+                                        onClick={() => toggleChipMode(i)}
+                                    >
+                                        {modeLabel}
+                                    </button>
+                                    <button className="SelectChipRemove" onClick={() => removeChip(i)}>×</button>
+                                </span>
+                            )
+                        }
+
+                        if (chip.type === 'recency_lte') {
+                            return (
+                                <span key={i} className={chipClass}>
+                                    {t('Chip recency prefix')}&nbsp;
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={chip.days}
+                                        onChange={e => updateChip(i, {
+                                            type: 'recency_lte',
+                                            days: Math.max(1, Number(e.currentTarget.value)),
+                                            mode: chip.mode,
+                                        })}
+                                    />
+                                    {t('Chip recency suffix')}
+                                    <button
+                                        className={modeClass}
+                                        title="Toggle include/exclude"
+                                        onClick={() => toggleChipMode(i)}
+                                    >
+                                        {modeLabel}
+                                    </button>
+                                    <button className="SelectChipRemove" onClick={() => removeChip(i)}>×</button>
+                                </span>
+                            )
+                        }
+
+                        // Multi-select chip — chip type label + clickable value label
+                        const prefix = getChipTypePrefix(chip.type)
+                        const valueLabel = getChipValueLabel(chip, projects) ?? ''
                         return (
-                            <span key={i} className={`SelectChip${isExclude ? ' SelectChipExclude' : ''}`}>
-                                {label !== null && label}
-                                {chip.type === 'duration_gte' && (
-                                    <>
-                                        {t('Chip duration prefix')}&nbsp;
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={chip.days}
-                                            onChange={e => updateChip(i, { type: 'duration_gte', days: Math.max(1, Number(e.currentTarget.value)), mode: chip.mode })}
-                                        />
-                                        {t('Chip duration suffix')}
-                                    </>
-                                )}
-                                {chip.type === 'recency_lte' && (
-                                    <>
-                                        {t('Chip recency prefix')}&nbsp;
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={chip.days}
-                                            onChange={e => updateChip(i, { type: 'recency_lte', days: Math.max(1, Number(e.currentTarget.value)), mode: chip.mode })}
-                                        />
-                                        {t('Chip recency suffix')}
-                                    </>
-                                )}
+                            <span key={i} className={chipClass}>
+                                <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>{prefix}:</span>&nbsp;
                                 <button
-                                    className={`SelectChipMode${isExclude ? ' SelectChipModeExclude' : ''}`}
-                                    title={isExclude ? 'Currently excluding — click to include instead' : 'Currently including — click to exclude instead'}
+                                    className="SelectChipValueBtn"
+                                    title="Click to edit values"
+                                    onMouseDown={() => { skipNextBlur.current = true }}
+                                    onClick={() => {
+                                        openPickerForEdit(i)
+                                        searchInputRef.current?.focus()
+                                    }}
+                                >
+                                    {valueLabel}
+                                </button>
+                                <button
+                                    className={modeClass}
+                                    title="Toggle include/exclude"
                                     onClick={() => toggleChipMode(i)}
                                 >
-                                    {isExclude ? t('Chip mode exclude') : t('Chip mode include')}
+                                    {modeLabel}
                                 </button>
                                 <button className="SelectChipRemove" onClick={() => removeChip(i)}>×</button>
                             </span>
                         )
                     })}
+
+                    {/* Date chip — always rendered as a full-width row */}
+                    {dateChip && (
+                        <div className="SelectChipDateRow">
+                            <span>📅</span>
+                            <select
+                                value={dateChip.field}
+                                onChange={e => updateDateChip({ field: e.currentTarget.value as DateFilterField })}
+                            >
+                                <option value="create_time">{t('Date Filter Field Created')}</option>
+                                <option value="update_time">{t('Date Filter Field Updated')}</option>
+                            </select>
+                            <input
+                                type="date"
+                                value={dateChip.from}
+                                onChange={e => updateDateChip({ from: e.currentTarget.value })}
+                            />
+                            <span>–</span>
+                            <input
+                                type="date"
+                                value={dateChip.to}
+                                onChange={e => updateDateChip({ to: e.currentTarget.value })}
+                            />
+                            <div className="SelectChipDatePresets">
+                                {DATE_PRESETS.map(p => (
+                                    <button
+                                        key={p.days}
+                                        onMouseDown={(e) => { e.preventDefault() }}
+                                        onClick={() => setDatePreset(p.days)}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                                {(dateChip.from || dateChip.to) && (
+                                    <button
+                                        onMouseDown={(e) => { e.preventDefault() }}
+                                        onClick={() => updateDateChip({ from: '', to: '' })}
+                                    >
+                                        {t('Clear filter')}
+                                    </button>
+                                )}
+                            </div>
+                            <button
+                                className="SelectChipRemove"
+                                style={{ marginLeft: 'auto' }}
+                                onClick={removeDateChip}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* Search input — type # to open filter picker */}
+            {/* ── Search input + Picker popover ── */}
             <div className="relative">
                 <input
+                    ref={searchInputRef}
                     type="search"
                     className="SelectSearch"
                     style={chips.length > 0 ? { borderRadius: 0 } : undefined}
@@ -520,35 +704,98 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                         const val = (e.currentTarget as HTMLInputElement).value
                         lastClickedIndex.current = -1
                         setQuery(val)
-                        setShowPopover(val.endsWith('#') && availableGroups.length > 0)
+                        if (val.endsWith('#') && rootOptions.length > 0) {
+                            setShowPopover(true)
+                            setPickerView('root')
+                            setPickerSelections([])
+                            setEditingChipIndex(null)
+                        }
+                        else if (!val.includes('#')) {
+                            setShowPopover(false)
+                        }
                     }}
-                    onBlur={() => setTimeout(() => setShowPopover(false), 180)}
+                    onBlur={handleSearchBlur}
                 />
-                {showPopover && (
+
+                {/* Root picker: list of chip categories */}
+                {showPopover && pickerView === 'root' && (
                     <div className="SelectFilterPopover">
-                        {availableGroups.map(g => (
-                            <div key={g.group}>
-                                <div className="SelectFilterGroupHeader">{g.group}</div>
-                                {g.options.map(opt => (
-                                    <button
-                                        key={opt.id}
-                                        className="SelectFilterOption"
-                                        onMouseDown={(e) => {
-                                            e.preventDefault()
-                                            addChip(opt.make())
-                                        }}
-                                    >
-                                        <strong>{opt.label}</strong>
-                                        <small>{opt.desc}</small>
-                                    </button>
-                                ))}
-                            </div>
+                        {rootOptions.map(opt => (
+                            <button
+                                key={opt.id}
+                                className="SelectFilterOption"
+                                onMouseDown={(e) => { e.preventDefault() }}
+                                onClick={() => {
+                                    if (opt.hasSubView) {
+                                        setPickerView(opt.id as PickerView)
+                                        setPickerSelections([])
+                                    }
+                                    else {
+                                        addImmediateChip(opt.id as 'duration_gte' | 'recency_lte' | 'date')
+                                    }
+                                }}
+                            >
+                                <strong>{opt.label}</strong>
+                                <small>{opt.desc}</small>
+                            </button>
                         ))}
+                    </div>
+                )}
+
+                {/* Sub-view picker: checkboxes + apply button */}
+                {showPopover && pickerView !== 'root' && (
+                    <div className="SelectFilterPopover">
+                        <button
+                            className="SelectFilterBack"
+                            onMouseDown={(e) => { e.preventDefault() }}
+                            onClick={handlePickerBack}
+                        >
+                            ← {getPickerViewTitle(pickerView)}
+                        </button>
+                        {currentSubOptions.length === 0 && pickerView === 'project' && (
+                            <div
+                                className="SelectFilterOption"
+                                style={{ color: '#9ca3af', cursor: 'default' }}
+                            >
+                                {t('Loading')}...
+                            </div>
+                        )}
+                        {currentSubOptions.map((opt) => {
+                            const isSelected = pickerSelections.includes(opt.id)
+                            return (
+                                <button
+                                    key={opt.id}
+                                    className={`SelectFilterCheckboxBtn${isSelected ? ' SelectFilterCheckboxBtnChecked' : ''}`}
+                                    onMouseDown={(e) => { e.preventDefault() }}
+                                    onClick={() => togglePickerSelection(opt.id)}
+                                >
+                                    <span className="SelectFilterCheckIcon">
+                                        {isSelected ? '●' : '○'}
+                                    </span>
+                                    <div>
+                                        <strong>{opt.label}</strong>
+                                        {opt.desc && (
+                                            <small style={{ display: 'block', fontSize: '0.7rem', color: '#9ca3af' }}>
+                                                {opt.desc}
+                                            </small>
+                                        )}
+                                    </div>
+                                </button>
+                            )
+                        })}
+                        <button
+                            className="SelectFilterApplyBtn"
+                            disabled={pickerSelections.length === 0}
+                            onMouseDown={(e) => { e.preventDefault() }}
+                            onClick={applyPickerSelections}
+                        >
+                            {editingChipIndex !== null ? 'Update filter' : 'Add filter'}
+                        </button>
                     </div>
                 )}
             </div>
 
-            {/* Toolbar: select-all + last-100 + counter */}
+            {/* ── Toolbar: select-all + last-100 + counter ── */}
             <div className="SelectToolbar">
                 <CheckBox
                     label={t('Select All')}
@@ -579,7 +826,7 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                 </div>
             </div>
 
-            {/* Conversation list */}
+            {/* ── Conversation list ── */}
             <ul className="SelectList">
                 {loading && conversations.length === 0 && <li className="SelectItem">{t('Loading')}...</li>}
                 {error && <li className="SelectItem">{t('Error')}: {error}</li>}
@@ -661,9 +908,6 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
 
     const [selected, setSelected] = useState<ApiConversationItem[]>([])
     const [exportType, setExportType] = useState(exportAllOptions[0].label)
-    const [dateFrom, setDateFrom] = useState('')
-    const [dateTo, setDateTo] = useState('')
-    const [filterField, setFilterField] = useState<DateFilterField>('create_time')
     const disabled = processing || !!error || selected.length === 0
 
     // "Load more" state
@@ -841,14 +1085,14 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         archiveQueue.start()
     }, [disabled, selected, archiveQueue, t])
 
-    // Fetch projects in the background for chat-class chip resolution
+    // Fetch projects for chat-class chip resolution
     useEffect(() => {
         fetchProjects()
             .then(setProjects)
             .catch(err => console.error('Failed to fetch projects:', err))
     }, [])
 
-    // Auto-load all conversations from the main endpoint on dialog open
+    // Auto-load conversations on dialog open
     useEffect(() => {
         setSelected([])
         setApiConversations([])
@@ -903,15 +1147,6 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 ref={fileInputRef}
                 onChange={onUpload}
             />
-            <DateFilter
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                filterField={filterField}
-                setDateFrom={setDateFrom}
-                setDateTo={setDateTo}
-                setFilterField={setFilterField}
-                disabled={processing}
-            />
             <ConversationSelect
                 conversations={conversations}
                 projects={projects}
@@ -920,12 +1155,9 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 disabled={processing}
                 loading={loading}
                 error={error}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                filterField={filterField}
             />
 
-            {/* Load-more button — shown when more pages exist beyond the initial fetch */}
+            {/* Load-more button */}
             {exportSource === 'API' && !loading && !processing && hasMore && (
                 <div className="flex items-center justify-center mt-2 mb-1 gap-2">
                     <button
@@ -949,7 +1181,12 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             )}
 
             <div className="flex mt-3 items-center gap-2">
-                <select className="Select shrink-0" disabled={processing} value={exportType} onChange={e => setExportType(e.currentTarget.value)}>
+                <select
+                    className="Select shrink-0"
+                    disabled={processing}
+                    value={exportType}
+                    onChange={e => setExportType(e.currentTarget.value)}
+                >
                     {exportAllOptions.map(({ label }) => (
                         <option key={t(label)} value={label}>{label}</option>
                     ))}

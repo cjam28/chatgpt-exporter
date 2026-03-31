@@ -648,6 +648,136 @@ html {
     padding: 0;
 }
 
+/* \u2500\u2500 Picker: back button (stage 2 header) \u2500\u2500 */
+.SelectFilterBack {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 7px 14px 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+}
+.SelectFilterBack:hover { color: #374151; }
+@media (prefers-color-scheme: dark) {
+    .SelectFilterBack { color: #9ca3af; border-color: #374151; }
+    .SelectFilterBack:hover { color: #e5e7eb; }
+}
+
+/* \u2500\u2500 Picker: checkbox-style option in sub-view \u2500\u2500 */
+.SelectFilterCheckboxBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    text-align: left;
+}
+.SelectFilterCheckboxBtn:hover { background: #f3f4f6; }
+@media (prefers-color-scheme: dark) {
+    .SelectFilterCheckboxBtn:hover { background: #374151; }
+}
+.SelectFilterCheckIcon {
+    flex-shrink: 0;
+    width: 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #9ca3af;
+}
+.SelectFilterCheckboxBtnChecked .SelectFilterCheckIcon { color: #2563eb; }
+@media (prefers-color-scheme: dark) {
+    .SelectFilterCheckboxBtnChecked .SelectFilterCheckIcon { color: #60a5fa; }
+}
+
+/* \u2500\u2500 Picker: apply/update button at bottom of sub-view \u2500\u2500 */
+.SelectFilterApplyBtn {
+    display: block;
+    width: calc(100% - 28px);
+    margin: 6px 14px;
+    padding: 5px 0;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+}
+.SelectFilterApplyBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.SelectFilterApplyBtn:not(:disabled):hover { background: #1d4ed8; }
+
+/* \u2500\u2500 Chip: clickable value label that opens edit picker \u2500\u2500 */
+.SelectChipValueBtn {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+.SelectChipValueBtn:hover { opacity: 0.75; }
+
+/* \u2500\u2500 Date chip: full-width row in chip bar \u2500\u2500 */
+.SelectChipDateRow {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 5px 8px;
+    background: #eff6ff;
+    border-radius: 6px;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    font-size: 0.75rem;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectChipDateRow { background: #1e3a5f; color: #93c5fd; border-color: #1e40af; }
+}
+.SelectChipDateRow select,
+.SelectChipDateRow input[type="date"] {
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    color: inherit;
+    font-size: 0.72rem;
+    padding: 1px 4px;
+    outline: none;
+}
+.SelectChipDateRow input[type="date"] { min-width: 6rem; }
+.SelectChipDatePresets {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+.SelectChipDatePresets button {
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    font-size: 0.67rem;
+    cursor: pointer;
+}
+.SelectChipDatePresets button:hover { background: rgba(37, 99, 235, 0.12); }
+@media (prefers-color-scheme: dark) {
+    .SelectChipDatePresets button:hover { background: rgba(147, 197, 253, 0.12); }
+}
+
 @keyframes contentShow {
     from {
         opacity: 0;
@@ -22409,155 +22539,170 @@ ${content2}`;
       return title2.toLowerCase().includes(lower);
     }
   }
+  const NULL_ORIGIN_ID = "__web_app__";
+  const CHAT_CLASS_SUB_OPTIONS = [
+    { id: "regular", label: "💬 Regular", desc: "Standard chats with no GPT or Project" },
+    { id: "gpt", label: "🤖 GPT", desc: "Used a GPT Store AI" },
+    { id: "project", label: "📂 Project", desc: "Any conversation in a Project" }
+  ];
+  const STATUS_SUB_OPTIONS = [
+    { id: "starred", label: "⭐ Starred", desc: "Starred conversations" },
+    { id: "temporary", label: "💬 Temporary", desc: "Temporary chats not saved to history" },
+    { id: "pinned", label: "📌 Pinned", desc: "Pinned conversations" }
+  ];
+  const DATE_PRESETS = [
+    { days: 7, label: "7d" },
+    { days: 30, label: "30d" },
+    { days: 90, label: "90d" },
+    { days: 365, label: "Year" }
+  ];
+  const ROOT_PICKER_ITEMS = [
+    { id: "chat_class", label: "💬 Chat class", desc: "Regular, GPT, or Project chats", hasSubView: true },
+    { id: "origin", label: "🌐 Origin", desc: "How the conversation was started", hasSubView: true },
+    { id: "project", label: "📂 Project", desc: "Filter by specific project", hasSubView: true },
+    { id: "status", label: "⭐ Status", desc: "Starred, Temporary, or Pinned", hasSubView: true },
+    { id: "duration_gte", label: "⏱ Duration", desc: "Long conversation (≥ N days)", hasSubView: false },
+    { id: "recency_lte", label: "📅 Recency", desc: "Recently updated (< N days)", hasSubView: false },
+    { id: "date", label: "📅 Date range", desc: "Filter by created or updated date", hasSubView: false }
+  ];
   function isChipDuplicate(chips, candidate) {
-    return chips.some((c2) => {
-      if (c2.type !== candidate.type) return false;
-      if (c2.type === "duration_gte" || c2.type === "recency_lte") return true;
-      if (c2.type === "chat_class" && candidate.type === "chat_class") return c2.value === candidate.value;
-      if (c2.type === "origin" && candidate.type === "origin") return c2.value === candidate.value;
-      if (c2.type === "status" && candidate.type === "status") return c2.value === candidate.value;
-      return false;
-    });
+    return chips.some((c2) => c2.type === candidate.type);
   }
-  function chipDisplayLabel(chip) {
+  function getChipEncodedSelections(chip) {
     switch (chip.type) {
       case "chat_class":
-        return chip.value === "regular" ? "💬 Regular" : chip.value === "gpt" ? "🤖 GPT" : "📂 Project";
+        return chip.values;
       case "origin":
-        return `🌐 ${chip.label}`;
+        return chip.values.map((v2) => v2 === null ? NULL_ORIGIN_ID : v2);
+      case "project":
+        return chip.projectIds;
       case "status":
-        return chip.value === "starred" ? "⭐ Starred" : chip.value === "temporary" ? "💬 Temporary" : "📌 Pinned";
-      case "duration_gte":
-      case "recency_lte":
+        return chip.values;
+      default:
+        return [];
+    }
+  }
+  function makeChipFromPickerState(view, selections, mode) {
+    switch (view) {
+      case "chat_class":
+        return { type: "chat_class", values: selections, mode };
+      case "origin":
+        return { type: "origin", values: selections.map((s2) => s2 === NULL_ORIGIN_ID ? null : s2), mode };
+      case "project":
+        return { type: "project", projectIds: selections, mode };
+      case "status":
+        return { type: "status", values: selections, mode };
+    }
+  }
+  function getChipValueLabel(chip, projects) {
+    switch (chip.type) {
+      case "chat_class": {
+        if (chip.values.length === 0) return "none";
+        if (chip.values.length === 3) return "all types";
+        const lbl = { regular: "💬 Regular", gpt: "🤖 GPT", project: "📂 Project" };
+        return chip.values.map((v2) => lbl[v2]).join(", ");
+      }
+      case "origin": {
+        if (chip.values.length === 0) return "none";
+        return chip.values.map((v2) => v2 === null ? "Web/App" : v2.charAt(0).toUpperCase() + v2.slice(1)).join(", ");
+      }
+      case "project": {
+        if (chip.projectIds.length === 0) return "any project";
+        return chip.projectIds.map((id) => {
+          var _a;
+          return ((_a = projects.find((p2) => p2.id === id)) == null ? void 0 : _a.display.name) ?? id.slice(0, 8);
+        }).join(", ");
+      }
+      case "status": {
+        if (chip.values.length === 0) return "none";
+        const lbl = { starred: "⭐ Starred", temporary: "💬 Temp", pinned: "📌 Pinned" };
+        return chip.values.map((v2) => lbl[v2]).join(", ");
+      }
+      default:
         return null;
     }
+  }
+  function getChipTypePrefix(type) {
+    if (type === "chat_class") return "💬 Chat";
+    if (type === "origin") return "🌐 Origin";
+    if (type === "project") return "📂 Project";
+    if (type === "status") return "⭐ Status";
+    return "";
+  }
+  function getPickerViewTitle(view) {
+    if (view === "chat_class") return "Chat class";
+    if (view === "origin") return "Origin";
+    if (view === "project") return "Project";
+    if (view === "status") return "Status";
+    return "";
+  }
+  function matchDateChip(c2, chip) {
+    if (chip.from) {
+      const fromMs = new Date(chip.from).getTime();
+      if (!Number.isNaN(fromMs) && toMs(c2[chip.field]) < fromMs) return false;
+    }
+    if (chip.to) {
+      const toEndMs = (/* @__PURE__ */ new Date(`${chip.to}T23:59:59.999`)).getTime();
+      if (!Number.isNaN(toEndMs) && toMs(c2[chip.field]) > toEndMs) return false;
+    }
+    return true;
+  }
+  function matchFilterChip(c2, chip, projectIdSet) {
+    let raw2 = true;
+    switch (chip.type) {
+      case "chat_class": {
+        if (chip.values.length === 0) break;
+        const gizmoId = c2.gizmo_id ?? null;
+        const isProject = gizmoId !== null && projectIdSet.has(gizmoId);
+        const isGpt = gizmoId !== null && !isProject;
+        raw2 = chip.values.some((v2) => {
+          if (v2 === "regular") return gizmoId === null;
+          if (v2 === "project") return isProject;
+          return isGpt;
+        });
+        break;
+      }
+      case "origin": {
+        if (chip.values.length === 0) break;
+        raw2 = chip.values.some((v2) => {
+          if (v2 === null) return (c2.conversation_origin ?? null) === null;
+          return c2.conversation_origin === v2;
+        });
+        break;
+      }
+      case "project": {
+        if (chip.projectIds.length === 0) break;
+        raw2 = chip.projectIds.includes(c2.gizmo_id);
+        break;
+      }
+      case "status": {
+        if (chip.values.length === 0) break;
+        raw2 = chip.values.some((v2) => {
+          if (v2 === "starred") return c2.is_starred === true;
+          if (v2 === "temporary") return c2.is_temporary_chat === true;
+          return c2.pinned_time != null;
+        });
+        break;
+      }
+      case "duration_gte":
+        raw2 = toMs(c2.update_time) - toMs(c2.create_time) >= chip.days * 864e5;
+        break;
+      case "recency_lte":
+        raw2 = Date.now() - toMs(c2.update_time) <= chip.days * 864e5;
+        break;
+    }
+    return chip.mode === "include" ? raw2 : !raw2;
   }
   function applyChips(conversations, chips, logic, projects) {
     if (chips.length === 0) return conversations;
     const projectIdSet = new Set(projects.map((p2) => p2.id));
-    function matchSingle(c2, chip) {
-      let raw2;
-      switch (chip.type) {
-        case "chat_class": {
-          const gizmoId = c2.gizmo_id ?? null;
-          const isProject = gizmoId !== null && projectIdSet.has(gizmoId);
-          const isGpt = gizmoId !== null && !isProject;
-          if (chip.value === "regular") raw2 = gizmoId === null;
-          else if (chip.value === "project") raw2 = isProject;
-          else raw2 = isGpt;
-          break;
-        }
-        case "origin":
-          raw2 = chip.value === null ? (c2.conversation_origin ?? null) === null : c2.conversation_origin === chip.value;
-          break;
-        case "status":
-          if (chip.value === "starred") raw2 = c2.is_starred === true;
-          else if (chip.value === "temporary") raw2 = c2.is_temporary_chat === true;
-          else raw2 = c2.pinned_time != null;
-          break;
-        case "duration_gte":
-          raw2 = toMs(c2.update_time) - toMs(c2.create_time) >= chip.days * 864e5;
-          break;
-        case "recency_lte":
-          raw2 = Date.now() - toMs(c2.update_time) <= chip.days * 864e5;
-          break;
-        default:
-          raw2 = true;
-      }
-      return chip.mode === "include" ? raw2 : !raw2;
-    }
-    return logic === "AND" ? conversations.filter((c2) => chips.every((chip) => matchSingle(c2, chip))) : conversations.filter((c2) => chips.some((chip) => matchSingle(c2, chip)));
+    const dateChip = chips.find((c2) => c2.type === "date");
+    const other = chips.filter((c2) => c2.type !== "date");
+    let result = conversations;
+    if (dateChip) result = result.filter((c2) => matchDateChip(c2, dateChip));
+    if (other.length === 0) return result;
+    return logic === "AND" ? result.filter((c2) => other.every((chip) => matchFilterChip(c2, chip, projectIdSet))) : result.filter((c2) => other.some((chip) => matchFilterChip(c2, chip, projectIdSet)));
   }
-  const DateFilter = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
-    const { t: t2 } = useTranslation();
-    const todayStr = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const daysAgoStr = (n2) => {
-      const d2 = /* @__PURE__ */ new Date();
-      d2.setDate(d2.getDate() - n2);
-      return d2.toISOString().slice(0, 10);
-    };
-    const thisYearStr = () => `${(/* @__PURE__ */ new Date()).getFullYear()}-01-01`;
-    const presets = [
-      { key: "Date Preset 7d", from: () => daysAgoStr(7), to: todayStr },
-      { key: "Date Preset 30d", from: () => daysAgoStr(30), to: todayStr },
-      { key: "Date Preset 90d", from: () => daysAgoStr(90), to: todayStr },
-      { key: "Date Preset Year", from: thisYearStr, to: todayStr }
-    ];
-    const hasFilter = !!(dateFrom || dateTo);
-    return /* @__PURE__ */ o$8("div", { className: "mb-3 text-sm text-gray-600 dark:text-gray-300", children: [
-      /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2 mb-1.5", children: [
-        /* @__PURE__ */ o$8("span", { className: "shrink-0 font-medium", title: t2("Date Filter Hint"), children: t2("Date Filter Label") }),
-        /* @__PURE__ */ o$8(
-          "select",
-          {
-            className: "Select",
-            value: filterField,
-            disabled,
-            onChange: (e2) => setFilterField(e2.currentTarget.value),
-            style: { minWidth: "5.5rem" },
-            children: [
-              /* @__PURE__ */ o$8("option", { value: "create_time", children: t2("Date Filter Field Created") }),
-              /* @__PURE__ */ o$8("option", { value: "update_time", children: t2("Date Filter Field Updated") })
-            ]
-          }
-        ),
-        /* @__PURE__ */ o$8("div", { className: "flex items-center gap-1 ml-auto flex-wrap", children: [
-          presets.map((p2) => /* @__PURE__ */ o$8(
-            "button",
-            {
-              className: "Button neutral",
-              style: { padding: "2px 7px", fontSize: "0.75rem" },
-              disabled,
-              onClick: () => {
-                setDateFrom(p2.from());
-                setDateTo(p2.to());
-              },
-              children: t2(p2.key)
-            },
-            p2.key
-          )),
-          hasFilter && /* @__PURE__ */ o$8(
-            "button",
-            {
-              className: "Button neutral",
-              style: { padding: "2px 7px", fontSize: "0.75rem" },
-              disabled,
-              onClick: () => {
-                setDateFrom("");
-                setDateTo("");
-              },
-              children: t2("Clear filter")
-            }
-          )
-        ] })
-      ] }),
-      /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ o$8(
-          "input",
-          {
-            type: "date",
-            className: "Input",
-            value: dateFrom,
-            disabled,
-            onChange: (e2) => setDateFrom(e2.currentTarget.value),
-            style: { flex: 1, minWidth: 0 }
-          }
-        ),
-        /* @__PURE__ */ o$8("span", { className: "shrink-0 text-gray-400", children: "–" }),
-        /* @__PURE__ */ o$8(
-          "input",
-          {
-            type: "date",
-            className: "Input",
-            value: dateTo,
-            disabled,
-            onChange: (e2) => setDateTo(e2.currentTarget.value),
-            style: { flex: 1, minWidth: 0 }
-          }
-        )
-      ] })
-    ] });
-  };
   const ConversationSelect = ({
     conversations,
     projects,
@@ -22565,132 +22710,58 @@ ${content2}`;
     setSelected,
     disabled,
     loading,
-    error: error2,
-    dateFrom,
-    dateTo,
-    filterField
+    error: error2
   }) => {
     const { t: t2 } = useTranslation();
     const [query2, setQuery] = h$4("");
     const [chips, setChips] = h$4([]);
     const [chipLogic, setChipLogic] = h$4("AND");
     const [showPopover, setShowPopover] = h$4(false);
+    const [pickerView, setPickerView] = h$4("root");
+    const [pickerSelections, setPickerSelections] = h$4([]);
+    const [editingChipIndex, setEditingChipIndex] = h$4(null);
     const lastClickedIndex = _(-1);
-    const pickerGroups = F$1(() => {
-      const originMap = /* @__PURE__ */ new Map();
+    const searchInputRef = _(null);
+    const skipNextBlur = _(false);
+    const originSubOptions = F$1(() => {
+      const map2 = /* @__PURE__ */ new Map();
       for (const c2 of conversations) {
         const val = c2.conversation_origin ?? null;
-        if (!originMap.has(val)) {
-          const label = val === null ? t2("Chip origin web label").replace("🌐 ", "") : val.charAt(0).toUpperCase() + val.slice(1);
-          originMap.set(val, label);
+        const id = val === null ? NULL_ORIGIN_ID : val;
+        if (!map2.has(id)) {
+          const label = val === null ? "Web / App" : val.charAt(0).toUpperCase() + val.slice(1);
+          map2.set(id, label);
         }
       }
-      return [
-        {
-          group: t2("Chip group chat class"),
-          options: [
-            {
-              id: "cc_regular",
-              label: t2("Chip cc regular label"),
-              desc: t2("Chip cc regular desc"),
-              make: () => ({ type: "chat_class", value: "regular", mode: "include" })
-            },
-            {
-              id: "cc_gpt",
-              label: t2("Chip cc gpt label"),
-              desc: t2("Chip cc gpt desc"),
-              make: () => ({ type: "chat_class", value: "gpt", mode: "include" })
-            },
-            {
-              id: "cc_project",
-              label: t2("Chip cc project label"),
-              desc: t2("Chip cc project desc"),
-              make: () => ({ type: "chat_class", value: "project", mode: "include" })
-            }
-          ]
-        },
-        {
-          group: t2("Chip group origin"),
-          options: [...originMap.entries()].map(([val, label]) => ({
-            id: `orig_${val ?? "null"}`,
-            label: `🌐 ${label}`,
-            desc: val === null ? t2("Chip origin web desc") : `Started via ${label}`,
-            make: () => ({ type: "origin", value: val, label, mode: "include" })
-          }))
-        },
-        {
-          group: t2("Chip group status"),
-          options: [
-            {
-              id: "st_starred",
-              label: t2("Chip status starred label"),
-              desc: t2("Chip status starred desc"),
-              make: () => ({ type: "status", value: "starred", mode: "include" })
-            },
-            {
-              id: "st_temp",
-              label: t2("Chip status temporary label"),
-              desc: t2("Chip status temporary desc"),
-              make: () => ({ type: "status", value: "temporary", mode: "include" })
-            },
-            {
-              id: "st_pinned",
-              label: t2("Chip status pinned label"),
-              desc: t2("Chip status pinned desc"),
-              make: () => ({ type: "status", value: "pinned", mode: "include" })
-            }
-          ]
-        },
-        {
-          group: t2("Chip group duration"),
-          options: [
-            {
-              id: "dur",
-              label: t2("Chip duration label"),
-              desc: t2("Chip duration desc"),
-              make: () => ({ type: "duration_gte", days: 7, mode: "include" })
-            }
-          ]
-        },
-        {
-          group: t2("Chip group recency"),
-          options: [
-            {
-              id: "rec",
-              label: t2("Chip recency label"),
-              desc: t2("Chip recency desc"),
-              make: () => ({ type: "recency_lte", days: 30, mode: "include" })
-            }
-          ]
-        }
-      ];
-    }, [conversations, t2]);
-    const availableGroups = F$1(
-      () => pickerGroups.map((g2) => ({ ...g2, options: g2.options.filter((opt) => !isChipDuplicate(chips, opt.make())) })).filter((g2) => g2.options.length > 0),
-      [pickerGroups, chips]
+      return [...map2.entries()].map(([id, label]) => ({
+        id,
+        label: `🌐 ${label}`,
+        desc: id === NULL_ORIGIN_ID ? "Web app or mobile app" : `Started via ${label}`
+      }));
+    }, [conversations]);
+    const projectSubOptions = F$1(
+      () => projects.map((p2) => ({ id: p2.id, label: `📂 ${p2.display.name}`, desc: "" })),
+      [projects]
+    );
+    const currentSubOptions = F$1(() => {
+      if (pickerView === "chat_class") return CHAT_CLASS_SUB_OPTIONS;
+      if (pickerView === "origin") return originSubOptions;
+      if (pickerView === "project") return projectSubOptions;
+      if (pickerView === "status") return STATUS_SUB_OPTIONS;
+      return [];
+    }, [pickerView, originSubOptions, projectSubOptions]);
+    const rootOptions = F$1(
+      () => ROOT_PICKER_ITEMS.filter((opt) => !chips.some((c2) => c2.type === opt.id)),
+      [chips]
     );
     const filtered = F$1(() => {
       let result = conversations;
       const q2 = query2.trim().replace(/#$/, "").trim();
       if (q2) result = result.filter((c2) => textSearch(c2.title, q2));
-      if (dateFrom) {
-        const fromMs = new Date(dateFrom).getTime();
-        if (!Number.isNaN(fromMs)) result = result.filter((c2) => toMs(c2[filterField]) >= fromMs);
-      }
-      if (dateTo) {
-        const toEndMs = (/* @__PURE__ */ new Date(`${dateTo}T23:59:59.999`)).getTime();
-        if (!Number.isNaN(toEndMs)) result = result.filter((c2) => toMs(c2[filterField]) <= toEndMs);
-      }
       return applyChips(result, chips, chipLogic, projects);
-    }, [conversations, query2, dateFrom, dateTo, filterField, chips, chipLogic, projects]);
+    }, [conversations, query2, chips, chipLogic, projects]);
     const allFilteredSelected = filtered.length > 0 && filtered.every((c2) => selected.some((x2) => x2.id === c2.id));
-    const addChip = T$4((chip) => {
-      if (isChipDuplicate(chips, chip)) return;
-      setChips((prev) => [...prev, chip]);
-      setQuery((q2) => q2.endsWith("#") ? q2.slice(0, -1) : q2);
-      lastClickedIndex.current = -1;
-      setShowPopover(false);
-    }, [chips]);
+    const nonDateChips = F$1(() => chips.filter((c2) => c2.type !== "date"), [chips]);
     const updateChip = T$4((index2, updated) => {
       setChips((prev) => prev.map((c2, i2) => i2 === index2 ? updated : c2));
     }, []);
@@ -22698,11 +22769,104 @@ ${content2}`;
       setChips((prev) => prev.filter((_24, i2) => i2 !== index2));
     }, []);
     const toggleChipMode = T$4((index2) => {
-      setChips((prev) => prev.map((c2, i2) => i2 === index2 ? { ...c2, mode: c2.mode === "include" ? "exclude" : "include" } : c2));
+      setChips((prev) => prev.map((c2, i2) => {
+        if (i2 !== index2 || c2.type === "date") return c2;
+        return { ...c2, mode: c2.mode === "include" ? "exclude" : "include" };
+      }));
     }, []);
+    const dateChip = F$1(
+      () => chips.find((c2) => c2.type === "date"),
+      [chips]
+    );
+    const updateDateChip = T$4((updates) => {
+      setChips((prev) => prev.map((c2) => {
+        if (c2.type !== "date") return c2;
+        return { ...c2, ...updates };
+      }));
+    }, []);
+    const setDatePreset = T$4((days) => {
+      const d2 = /* @__PURE__ */ new Date();
+      const from = new Date(d2.getTime() - days * 864e5).toISOString().slice(0, 10);
+      const to = d2.toISOString().slice(0, 10);
+      setChips((prev) => prev.map((c2) => {
+        if (c2.type !== "date") return c2;
+        return { ...c2, from, to };
+      }));
+    }, []);
+    const removeDateChip = T$4(() => {
+      setChips((prev) => prev.filter((c2) => c2.type !== "date"));
+    }, []);
+    const closePicker = T$4(() => {
+      setShowPopover(false);
+      setPickerView("root");
+      setPickerSelections([]);
+      setEditingChipIndex(null);
+    }, []);
+    const togglePickerSelection = T$4((id) => {
+      setPickerSelections(
+        (prev) => prev.includes(id) ? prev.filter((s2) => s2 !== id) : [...prev, id]
+      );
+    }, []);
+    const applyPickerSelections = T$4(() => {
+      if (pickerView === "root") return;
+      let mode = "include";
+      if (editingChipIndex !== null) {
+        const existing = chips[editingChipIndex];
+        if (existing && existing.type !== "date") mode = existing.mode;
+      }
+      const newChip = makeChipFromPickerState(pickerView, pickerSelections, mode);
+      if (editingChipIndex !== null) {
+        updateChip(editingChipIndex, newChip);
+      } else if (!isChipDuplicate(chips, newChip)) {
+        setChips((prev) => [...prev, newChip]);
+      }
+      setQuery((q2) => q2.endsWith("#") ? q2.slice(0, -1) : q2);
+      closePicker();
+    }, [pickerView, pickerSelections, editingChipIndex, chips, updateChip, closePicker]);
+    const openPickerForEdit = T$4((index2) => {
+      const chip = chips[index2];
+      if (!chip) return;
+      if (chip.type === "date" || chip.type === "duration_gte" || chip.type === "recency_lte") return;
+      setPickerSelections(getChipEncodedSelections(chip));
+      setPickerView(chip.type);
+      setEditingChipIndex(index2);
+      setShowPopover(true);
+    }, [chips]);
+    const addImmediateChip = T$4((type) => {
+      let chip;
+      if (type === "duration_gte") {
+        chip = { type: "duration_gte", days: 7, mode: "include" };
+      } else if (type === "recency_lte") {
+        chip = { type: "recency_lte", days: 30, mode: "include" };
+      } else {
+        chip = { type: "date", field: "create_time", from: "", to: "" };
+      }
+      if (!isChipDuplicate(chips, chip)) {
+        setChips((prev) => [...prev, chip]);
+      }
+      setQuery((q2) => q2.endsWith("#") ? q2.slice(0, -1) : q2);
+      closePicker();
+    }, [chips, closePicker]);
+    const handleSearchBlur = T$4(() => {
+      setTimeout(() => {
+        if (skipNextBlur.current) {
+          skipNextBlur.current = false;
+          return;
+        }
+        closePicker();
+      }, 200);
+    }, [closePicker]);
+    const handlePickerBack = T$4(() => {
+      if (editingChipIndex !== null) {
+        closePicker();
+      } else {
+        setPickerView("root");
+        setPickerSelections([]);
+      }
+    }, [editingChipIndex, closePicker]);
     return /* @__PURE__ */ o$8(k$3, { children: [
       chips.length > 0 && /* @__PURE__ */ o$8("div", { className: "SelectChips", children: [
-        chips.length > 1 && /* @__PURE__ */ o$8(
+        nonDateChips.length > 1 && /* @__PURE__ */ o$8(
           "button",
           {
             className: `SelectChipLogic${chipLogic === "OR" ? " SelectChipLogicOr" : ""}`,
@@ -22712,11 +22876,13 @@ ${content2}`;
           }
         ),
         chips.map((chip, i2) => {
-          const label = chipDisplayLabel(chip);
+          if (chip.type === "date") return null;
           const isExclude = chip.mode === "exclude";
-          return /* @__PURE__ */ o$8("span", { className: `SelectChip${isExclude ? " SelectChipExclude" : ""}`, children: [
-            label !== null && label,
-            chip.type === "duration_gte" && /* @__PURE__ */ o$8(k$3, { children: [
+          const chipClass = `SelectChip${isExclude ? " SelectChipExclude" : ""}`;
+          const modeClass = `SelectChipMode${isExclude ? " SelectChipModeExclude" : ""}`;
+          const modeLabel = isExclude ? t2("Chip mode exclude") : t2("Chip mode include");
+          if (chip.type === "duration_gte") {
+            return /* @__PURE__ */ o$8("span", { className: chipClass, children: [
               t2("Chip duration prefix"),
               " ",
               /* @__PURE__ */ o$8(
@@ -22725,12 +22891,28 @@ ${content2}`;
                   type: "number",
                   min: "1",
                   value: chip.days,
-                  onChange: (e2) => updateChip(i2, { type: "duration_gte", days: Math.max(1, Number(e2.currentTarget.value)), mode: chip.mode })
+                  onChange: (e2) => updateChip(i2, {
+                    type: "duration_gte",
+                    days: Math.max(1, Number(e2.currentTarget.value)),
+                    mode: chip.mode
+                  })
                 }
               ),
-              t2("Chip duration suffix")
-            ] }),
-            chip.type === "recency_lte" && /* @__PURE__ */ o$8(k$3, { children: [
+              t2("Chip duration suffix"),
+              /* @__PURE__ */ o$8(
+                "button",
+                {
+                  className: modeClass,
+                  title: "Toggle include/exclude",
+                  onClick: () => toggleChipMode(i2),
+                  children: modeLabel
+                }
+              ),
+              /* @__PURE__ */ o$8("button", { className: "SelectChipRemove", onClick: () => removeChip(i2), children: "×" })
+            ] }, i2);
+          }
+          if (chip.type === "recency_lte") {
+            return /* @__PURE__ */ o$8("span", { className: chipClass, children: [
               t2("Chip recency prefix"),
               " ",
               /* @__PURE__ */ o$8(
@@ -22739,28 +22921,131 @@ ${content2}`;
                   type: "number",
                   min: "1",
                   value: chip.days,
-                  onChange: (e2) => updateChip(i2, { type: "recency_lte", days: Math.max(1, Number(e2.currentTarget.value)), mode: chip.mode })
+                  onChange: (e2) => updateChip(i2, {
+                    type: "recency_lte",
+                    days: Math.max(1, Number(e2.currentTarget.value)),
+                    mode: chip.mode
+                  })
                 }
               ),
-              t2("Chip recency suffix")
+              t2("Chip recency suffix"),
+              /* @__PURE__ */ o$8(
+                "button",
+                {
+                  className: modeClass,
+                  title: "Toggle include/exclude",
+                  onClick: () => toggleChipMode(i2),
+                  children: modeLabel
+                }
+              ),
+              /* @__PURE__ */ o$8("button", { className: "SelectChipRemove", onClick: () => removeChip(i2), children: "×" })
+            ] }, i2);
+          }
+          const prefix = getChipTypePrefix(chip.type);
+          const valueLabel = getChipValueLabel(chip, projects) ?? "";
+          return /* @__PURE__ */ o$8("span", { className: chipClass, children: [
+            /* @__PURE__ */ o$8("span", { style: { fontSize: "0.68rem", opacity: 0.7 }, children: [
+              prefix,
+              ":"
             ] }),
+            " ",
             /* @__PURE__ */ o$8(
               "button",
               {
-                className: `SelectChipMode${isExclude ? " SelectChipModeExclude" : ""}`,
-                title: isExclude ? "Currently excluding — click to include instead" : "Currently including — click to exclude instead",
+                className: "SelectChipValueBtn",
+                title: "Click to edit values",
+                onMouseDown: () => {
+                  skipNextBlur.current = true;
+                },
+                onClick: () => {
+                  var _a;
+                  openPickerForEdit(i2);
+                  (_a = searchInputRef.current) == null ? void 0 : _a.focus();
+                },
+                children: valueLabel
+              }
+            ),
+            /* @__PURE__ */ o$8(
+              "button",
+              {
+                className: modeClass,
+                title: "Toggle include/exclude",
                 onClick: () => toggleChipMode(i2),
-                children: isExclude ? t2("Chip mode exclude") : t2("Chip mode include")
+                children: modeLabel
               }
             ),
             /* @__PURE__ */ o$8("button", { className: "SelectChipRemove", onClick: () => removeChip(i2), children: "×" })
           ] }, i2);
-        })
+        }),
+        dateChip && /* @__PURE__ */ o$8("div", { className: "SelectChipDateRow", children: [
+          /* @__PURE__ */ o$8("span", { children: "📅" }),
+          /* @__PURE__ */ o$8(
+            "select",
+            {
+              value: dateChip.field,
+              onChange: (e2) => updateDateChip({ field: e2.currentTarget.value }),
+              children: [
+                /* @__PURE__ */ o$8("option", { value: "create_time", children: t2("Date Filter Field Created") }),
+                /* @__PURE__ */ o$8("option", { value: "update_time", children: t2("Date Filter Field Updated") })
+              ]
+            }
+          ),
+          /* @__PURE__ */ o$8(
+            "input",
+            {
+              type: "date",
+              value: dateChip.from,
+              onChange: (e2) => updateDateChip({ from: e2.currentTarget.value })
+            }
+          ),
+          /* @__PURE__ */ o$8("span", { children: "–" }),
+          /* @__PURE__ */ o$8(
+            "input",
+            {
+              type: "date",
+              value: dateChip.to,
+              onChange: (e2) => updateDateChip({ to: e2.currentTarget.value })
+            }
+          ),
+          /* @__PURE__ */ o$8("div", { className: "SelectChipDatePresets", children: [
+            DATE_PRESETS.map((p2) => /* @__PURE__ */ o$8(
+              "button",
+              {
+                onMouseDown: (e2) => {
+                  e2.preventDefault();
+                },
+                onClick: () => setDatePreset(p2.days),
+                children: p2.label
+              },
+              p2.days
+            )),
+            (dateChip.from || dateChip.to) && /* @__PURE__ */ o$8(
+              "button",
+              {
+                onMouseDown: (e2) => {
+                  e2.preventDefault();
+                },
+                onClick: () => updateDateChip({ from: "", to: "" }),
+                children: t2("Clear filter")
+              }
+            )
+          ] }),
+          /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "SelectChipRemove",
+              style: { marginLeft: "auto" },
+              onClick: removeDateChip,
+              children: "×"
+            }
+          )
+        ] })
       ] }),
       /* @__PURE__ */ o$8("div", { className: "relative", children: [
         /* @__PURE__ */ o$8(
           "input",
           {
+            ref: searchInputRef,
             type: "search",
             className: "SelectSearch",
             style: chips.length > 0 ? { borderRadius: 0 } : void 0,
@@ -22771,29 +23056,100 @@ ${content2}`;
               const val = e2.currentTarget.value;
               lastClickedIndex.current = -1;
               setQuery(val);
-              setShowPopover(val.endsWith("#") && availableGroups.length > 0);
+              if (val.endsWith("#") && rootOptions.length > 0) {
+                setShowPopover(true);
+                setPickerView("root");
+                setPickerSelections([]);
+                setEditingChipIndex(null);
+              } else if (!val.includes("#")) {
+                setShowPopover(false);
+              }
             },
-            onBlur: () => setTimeout(() => setShowPopover(false), 180)
+            onBlur: handleSearchBlur
           }
         ),
-        showPopover && /* @__PURE__ */ o$8("div", { className: "SelectFilterPopover", children: availableGroups.map((g2) => /* @__PURE__ */ o$8("div", { children: [
-          /* @__PURE__ */ o$8("div", { className: "SelectFilterGroupHeader", children: g2.group }),
-          g2.options.map((opt) => /* @__PURE__ */ o$8(
+        showPopover && pickerView === "root" && /* @__PURE__ */ o$8("div", { className: "SelectFilterPopover", children: rootOptions.map((opt) => /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: "SelectFilterOption",
+            onMouseDown: (e2) => {
+              e2.preventDefault();
+            },
+            onClick: () => {
+              if (opt.hasSubView) {
+                setPickerView(opt.id);
+                setPickerSelections([]);
+              } else {
+                addImmediateChip(opt.id);
+              }
+            },
+            children: [
+              /* @__PURE__ */ o$8("strong", { children: opt.label }),
+              /* @__PURE__ */ o$8("small", { children: opt.desc })
+            ]
+          },
+          opt.id
+        )) }),
+        showPopover && pickerView !== "root" && /* @__PURE__ */ o$8("div", { className: "SelectFilterPopover", children: [
+          /* @__PURE__ */ o$8(
             "button",
             {
-              className: "SelectFilterOption",
+              className: "SelectFilterBack",
               onMouseDown: (e2) => {
                 e2.preventDefault();
-                addChip(opt.make());
               },
+              onClick: handlePickerBack,
               children: [
-                /* @__PURE__ */ o$8("strong", { children: opt.label }),
-                /* @__PURE__ */ o$8("small", { children: opt.desc })
+                "← ",
+                getPickerViewTitle(pickerView)
               ]
-            },
-            opt.id
-          ))
-        ] }, g2.group)) })
+            }
+          ),
+          currentSubOptions.length === 0 && pickerView === "project" && /* @__PURE__ */ o$8(
+            "div",
+            {
+              className: "SelectFilterOption",
+              style: { color: "#9ca3af", cursor: "default" },
+              children: [
+                t2("Loading"),
+                "..."
+              ]
+            }
+          ),
+          currentSubOptions.map((opt) => {
+            const isSelected = pickerSelections.includes(opt.id);
+            return /* @__PURE__ */ o$8(
+              "button",
+              {
+                className: `SelectFilterCheckboxBtn${isSelected ? " SelectFilterCheckboxBtnChecked" : ""}`,
+                onMouseDown: (e2) => {
+                  e2.preventDefault();
+                },
+                onClick: () => togglePickerSelection(opt.id),
+                children: [
+                  /* @__PURE__ */ o$8("span", { className: "SelectFilterCheckIcon", children: isSelected ? "●" : "○" }),
+                  /* @__PURE__ */ o$8("div", { children: [
+                    /* @__PURE__ */ o$8("strong", { children: opt.label }),
+                    opt.desc && /* @__PURE__ */ o$8("small", { style: { display: "block", fontSize: "0.7rem", color: "#9ca3af" }, children: opt.desc })
+                  ] })
+                ]
+              },
+              opt.id
+            );
+          }),
+          /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "SelectFilterApplyBtn",
+              disabled: pickerSelections.length === 0,
+              onMouseDown: (e2) => {
+                e2.preventDefault();
+              },
+              onClick: applyPickerSelections,
+              children: editingChipIndex !== null ? "Update filter" : "Add filter"
+            }
+          )
+        ] })
       ] }),
       /* @__PURE__ */ o$8("div", { className: "SelectToolbar", children: [
         /* @__PURE__ */ o$8(
@@ -22908,9 +23264,6 @@ ${content2}`;
     const [processing, setProcessing] = h$4(false);
     const [selected, setSelected] = h$4([]);
     const [exportType, setExportType] = h$4(exportAllOptions[0].label);
-    const [dateFrom, setDateFrom] = h$4("");
-    const [dateTo, setDateTo] = h$4("");
-    const [filterField, setFilterField] = h$4("create_time");
     const disabled = processing || !!error2 || selected.length === 0;
     const [hasMore, setHasMore] = h$4(false);
     const [loadingMore, setLoadingMore] = h$4(false);
@@ -23123,18 +23476,6 @@ ${content2}`;
         }
       ),
       /* @__PURE__ */ o$8(
-        DateFilter,
-        {
-          dateFrom,
-          dateTo,
-          filterField,
-          setDateFrom,
-          setDateTo,
-          setFilterField,
-          disabled: processing
-        }
-      ),
-      /* @__PURE__ */ o$8(
         ConversationSelect,
         {
           conversations,
@@ -23143,10 +23484,7 @@ ${content2}`;
           setSelected,
           disabled: processing,
           loading,
-          error: error2,
-          dateFrom,
-          dateTo,
-          filterField
+          error: error2
         }
       ),
       exportSource === "API" && !loading && !processing && hasMore && /* @__PURE__ */ o$8("div", { className: "flex items-center justify-center mt-2 mb-1 gap-2", children: [
@@ -23167,7 +23505,16 @@ ${content2}`;
         ] })
       ] }),
       /* @__PURE__ */ o$8("div", { className: "flex mt-3 items-center gap-2", children: [
-        /* @__PURE__ */ o$8("select", { className: "Select shrink-0", disabled: processing, value: exportType, onChange: (e2) => setExportType(e2.currentTarget.value), children: exportAllOptions.map(({ label }) => /* @__PURE__ */ o$8("option", { value: label, children: label }, t2(label))) }),
+        /* @__PURE__ */ o$8(
+          "select",
+          {
+            className: "Select shrink-0",
+            disabled: processing,
+            value: exportType,
+            onChange: (e2) => setExportType(e2.currentTarget.value),
+            children: exportAllOptions.map(({ label }) => /* @__PURE__ */ o$8("option", { value: label, children: label }, t2(label)))
+          }
+        ),
         /* @__PURE__ */ o$8("div", { className: "flex flex-grow" }),
         /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: archiveAll, children: t2("Archive") }),
         /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: deleteAll, children: t2("Delete") }),
