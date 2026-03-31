@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { useTranslation } from 'react-i18next'
-import { archiveConversation, deleteConversation, fetchAllConversations, fetchConversation, fetchProjects } from '../api'
+import { archiveConversation, deleteConversation, fetchAllConversations, fetchAllConversationsAll, fetchConversation, fetchProjects } from '../api'
 import { EXPORT_OPERATION_BATCH } from '../constants'
 import { exportAllToHtml } from '../exporter/html'
 import { exportAllToJson, exportAllToOfficialJson } from '../exporter/json'
@@ -34,6 +34,61 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     return result
 }
 
+/** Compact relative/absolute date for conversation list rows */
+function formatConvDate(time: number | string | undefined): string {
+    if (!time) return ''
+    const ms = typeof time === 'number' ? time * 1000 : new Date(time).getTime()
+    if (Number.isNaN(ms)) return ''
+    const d = new Date(ms)
+    const diffDays = Math.floor((Date.now() - ms) / 86_400_000)
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays}d ago`
+    if (diffDays < 365) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+/** Sentinel project ID meaning "fetch from all projects + main list" */
+const ALL_PROJECTS_ID = '__all__'
+
+// ---------------------------------------------------------------------------
+// Filter chip system
+// ---------------------------------------------------------------------------
+type FilterChipDef =
+    | { type: 'starred' }
+    | { type: 'not_temp' }
+    | { type: 'duration_gte'; days: number }
+    | { type: 'has_gizmo' }
+    | { type: 'no_gizmo' }
+
+interface ChipOption {
+    id: string
+    labelKey: string
+    descKey: string
+    make: () => FilterChipDef
+}
+
+const CHIP_OPTIONS: ChipOption[] = [
+    { id: 'starred', labelKey: 'Filter chip starred label', descKey: 'Filter chip starred desc', make: () => ({ type: 'starred' }) },
+    { id: 'not_temp', labelKey: 'Filter chip not temp label', descKey: 'Filter chip not temp desc', make: () => ({ type: 'not_temp' }) },
+    { id: 'duration_gte', labelKey: 'Filter chip duration label', descKey: 'Filter chip duration desc', make: () => ({ type: 'duration_gte', days: 7 }) },
+    { id: 'has_gizmo', labelKey: 'Filter chip gpt label', descKey: 'Filter chip gpt desc', make: () => ({ type: 'has_gizmo' }) },
+    { id: 'no_gizmo', labelKey: 'Filter chip regular label', descKey: 'Filter chip regular desc', make: () => ({ type: 'no_gizmo' }) },
+]
+
+function applyChips(conversations: ApiConversationItem[], chips: FilterChipDef[]): ApiConversationItem[] {
+    return chips.reduce((result, chip) => {
+        switch (chip.type) {
+            case 'starred': return result.filter(c => c.is_starred === true)
+            case 'not_temp': return result.filter(c => !c.is_temporary_chat)
+            case 'duration_gte': return result.filter(c => toMs(c.update_time) - toMs(c.create_time) >= chip.days * 86_400_000)
+            case 'has_gizmo': return result.filter(c => !!c.gizmo_id)
+            case 'no_gizmo': return result.filter(c => !c.gizmo_id)
+            default: return result
+        }
+    }, conversations)
+}
+
 interface ProjectSelectProps {
     projects: ApiProjectInfo[]
     selected: ApiProjectInfo | null | undefined
@@ -55,6 +110,11 @@ const ProjectSelect: FC<ProjectSelectProps> = ({ projects, selected, setSelected
                 value={value}
                 onChange={(e) => {
                     const projectId = e.currentTarget.value
+                    if (projectId === '__unselected__') return
+                    if (projectId === ALL_PROJECTS_ID) {
+                        setSelected({ id: ALL_PROJECTS_ID, organization_id: '', display: { name: t('All conversations'), description: '' } })
+                        return
+                    }
                     const project = projects.find(p => p.id === projectId)
                     setSelected(project || null)
                 }}
@@ -62,6 +122,7 @@ const ProjectSelect: FC<ProjectSelectProps> = ({ projects, selected, setSelected
                 {selected === undefined && (
                     <option value="__unselected__" disabled>{t('Select Project')}...</option>
                 )}
+                <option value={ALL_PROJECTS_ID}>📂 {t('All conversations')}</option>
                 <option value="">{t('(no project)')}</option>
                 {projects.map(project => (
                     <option key={project.id} value={project.id}>{project.display.name}</option>
@@ -197,6 +258,8 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
 }) => {
     const { t } = useTranslation()
     const [query, setQuery] = useState('')
+    const [chips, setChips] = useState<FilterChipDef[]>([])
+    const [showPopover, setShowPopover] = useState(false)
     const lastClickedIndex = useRef<number>(-1)
 
     const filtered = useMemo(() => {
@@ -210,30 +273,105 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
             }
         }
         if (dateTo) {
-            // Include the full end-of-day in local time
             const toEndMs = new Date(`${dateTo}T23:59:59.999`).getTime()
             if (!Number.isNaN(toEndMs)) {
                 result = result.filter(c => toMs(c[filterField]) <= toEndMs)
             }
         }
-        return result
-    }, [conversations, query, dateFrom, dateTo, filterField])
+        return applyChips(result, chips)
+    }, [conversations, query, dateFrom, dateTo, filterField, chips])
 
     const allFilteredSelected = filtered.length > 0
         && filtered.every(c => selected.some(x => x.id === c.id))
 
+    const addChip = (chip: FilterChipDef) => {
+        if (chips.some(c => c.type === chip.type)) return
+        setChips([...chips, chip])
+        setQuery(q => q.endsWith('#') ? q.slice(0, -1) : q)
+        lastClickedIndex.current = -1
+        setShowPopover(false)
+    }
+
+    const updateChip = (index: number, updated: FilterChipDef) => {
+        const next = [...chips]
+        next[index] = updated
+        setChips(next)
+    }
+
+    const removeChip = (index: number) => {
+        setChips(chips.filter((_, i) => i !== index))
+    }
+
+    // Available options (hide those already active)
+    const availableOptions = CHIP_OPTIONS.filter(o => !chips.some(c => c.type === o.id))
+
     return (
         <>
-            <input
-                type="search"
-                className="SelectSearch"
-                placeholder={t('Search')}
-                value={query}
-                onInput={(e) => {
-                    lastClickedIndex.current = -1
-                    setQuery(e.currentTarget.value)
-                }}
-            />
+            {/* Active filter chips */}
+            {chips.length > 0 && (
+                <div className="SelectChips">
+                    {chips.map((chip, i) => {
+                        const chipLabel = chip.type === 'duration_gte'
+                            ? null
+                            : t(CHIP_OPTIONS.find(o => o.id === chip.type)?.labelKey ?? '')
+                        return (
+                            <span key={i} className="SelectChip">
+                                {chipLabel ?? (
+                                    <>
+                                        {t('Filter chip active span')}&nbsp;
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={(chip as { type: 'duration_gte'; days: number }).days}
+                                            onChange={(e) => {
+                                                const days = Math.max(1, Number(e.currentTarget.value))
+                                                updateChip(i, { type: 'duration_gte', days })
+                                            }}
+                                        />
+                                        {t('Filter chip active suffix')}
+                                    </>
+                                )}
+                                <button className="SelectChipRemove" onClick={() => removeChip(i)}>×</button>
+                            </span>
+                        )
+                    })}
+                </div>
+            )}
+            {/* Search input with # filter trigger */}
+            <div className="relative">
+                <input
+                    type="search"
+                    className="SelectSearch"
+                    style={chips.length > 0 ? { borderRadius: 0 } : undefined}
+                    placeholder={chips.length > 0 ? t('Search') : `${t('Search')} — ${t('Filters hint')}`}
+                    value={query}
+                    disabled={disabled}
+                    onInput={(e) => {
+                        const val = (e.currentTarget as HTMLInputElement).value
+                        lastClickedIndex.current = -1
+                        setQuery(val)
+                        setShowPopover(val.endsWith('#') && availableOptions.length > 0)
+                    }}
+                    onBlur={() => setTimeout(() => setShowPopover(false), 180)}
+                />
+                {showPopover && (
+                    <div className="SelectFilterPopover">
+                        {availableOptions.map(opt => (
+                            <button
+                                key={opt.id}
+                                className="SelectFilterOption"
+                                onMouseDown={(e) => {
+                                    e.preventDefault()
+                                    addChip(opt.make())
+                                }}
+                            >
+                                <strong>{t(opt.labelKey)}</strong>
+                                <small>{t(opt.descKey)}</small>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
             <div className="SelectToolbar">
                 <CheckBox
                     label={t('Select All')}
@@ -302,6 +440,8 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                                     )
                                 }}
                             />
+                            <span className="SelectItemMeta">{formatConvDate(c.create_time)}</span>
+                            {c.is_starred && <span title="Starred" style={{ color: '#f59e0b', flexShrink: 0 }}>★</span>}
                         </li>
                     )
                 })}
@@ -569,17 +709,17 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         setSelected([])
         setApiConversations([])
         setLoading(true)
-        fetchAllConversations(
-            selectedProject?.id ?? null,
-            exportAllLimit,
-            batch => setApiConversations(prev => [...prev, ...batch]),
-        )
-            .catch((err) => {
+        const onBatch = (batch: ApiConversationItem[]) => setApiConversations(prev => [...prev, ...batch])
+        const fetcher = selectedProject?.id === ALL_PROJECTS_ID
+            ? fetchAllConversationsAll(projects, exportAllLimit, onBatch)
+            : fetchAllConversations(selectedProject?.id ?? null, exportAllLimit, onBatch)
+        fetcher
+            .catch((err: Error) => {
                 console.error('Error fetching conversations:', err)
                 setError(err.message || 'Failed to load conversations')
             })
             .finally(() => setLoading(false))
-    }, [selectedProject, exportAllLimit])
+    }, [selectedProject, exportAllLimit, projects])
 
     const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1
 

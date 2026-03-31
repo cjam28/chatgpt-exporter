@@ -295,6 +295,12 @@ export interface ApiConversationItem {
     create_time: number | string
     /** ISO 8601 string from the list endpoint */
     update_time?: number | string
+    /** True when the user has starred/pinned this conversation */
+    is_starred?: boolean | null
+    /** True for temporary chats that are not saved to history */
+    is_temporary_chat?: boolean
+    /** Non-null when the conversation belongs to a custom GPT or project */
+    gizmo_id?: string | null
 }
 
 export interface ApiConversations {
@@ -589,6 +595,30 @@ export async function fetchAllConversations(project: string | null = null, maxCo
     }
     // Ensure we don't return more than the requested limit if the last batch pushed us over
     return conversations.slice(0, maxConversations)
+}
+
+/**
+ * Fetch conversations from every source: the main conversation list (no-project)
+ * plus each project's own list.  Deduplicates by ID so a conversation that
+ * appears in both won't be exported twice.
+ */
+export async function fetchAllConversationsAll(
+    projects: ApiProjectInfo[],
+    maxConversations = 1000,
+    onBatch?: (batch: ApiConversationItem[]) => void,
+): Promise<void> {
+    const seen = new Set<string>()
+    const notify = (items: ApiConversationItem[]) => {
+        const novel = items.filter(c => !seen.has(c.id))
+        for (const c of novel) seen.add(c.id)
+        if (novel.length > 0) onBatch?.(novel)
+    }
+    // Main conversation list first (no-project or all, depending on the API)
+    await fetchAllConversations(null, maxConversations, notify)
+    // Then each project's conversations
+    for (const project of projects) {
+        await fetchAllConversations(project.id, maxConversations, notify)
+    }
 }
 
 export async function archiveConversation(chatId: string): Promise<boolean> {

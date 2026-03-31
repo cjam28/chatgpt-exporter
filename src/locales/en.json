@@ -62,5 +62,19 @@
   "Export batch info": "Exports in batches of 100 per download",
   "Exporting batch": "Exporting batch {{current}} of {{total}}",
   "Export batches button": "Export ({{n}} downloads)",
-  "Batch progress": "Batch {{current}}/{{total}}"
+  "Batch progress": "Batch {{current}}/{{total}}",
+  "All conversations": "All conversations",
+  "Filter chip starred label": "★ Starred",
+  "Filter chip starred desc": "Only conversations you have starred",
+  "Filter chip not temp label": "💾 Saved only",
+  "Filter chip not temp desc": "Skip temporary chats not saved to history",
+  "Filter chip duration label": "⏱ Long conversation",
+  "Filter chip duration desc": "Active span ≥ 7 days (click chip to adjust)",
+  "Filter chip gpt label": "🤖 GPT / custom AI",
+  "Filter chip gpt desc": "Chats that used a custom GPT or project AI",
+  "Filter chip regular label": "💬 Regular chats",
+  "Filter chip regular desc": "Chats without a custom GPT or project",
+  "Filter chip active span": "⏱ Active ≥",
+  "Filter chip active suffix": "d",
+  "Filters hint": "type # to add filters"
 }
