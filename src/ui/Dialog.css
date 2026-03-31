@@ -407,6 +407,136 @@
     padding: 0;
 }
 
+/* ── Picker: back button (stage 2 header) ── */
+.SelectFilterBack {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 7px 14px 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+}
+.SelectFilterBack:hover { color: #374151; }
+@media (prefers-color-scheme: dark) {
+    .SelectFilterBack { color: #9ca3af; border-color: #374151; }
+    .SelectFilterBack:hover { color: #e5e7eb; }
+}
+
+/* ── Picker: checkbox-style option in sub-view ── */
+.SelectFilterCheckboxBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    text-align: left;
+}
+.SelectFilterCheckboxBtn:hover { background: #f3f4f6; }
+@media (prefers-color-scheme: dark) {
+    .SelectFilterCheckboxBtn:hover { background: #374151; }
+}
+.SelectFilterCheckIcon {
+    flex-shrink: 0;
+    width: 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #9ca3af;
+}
+.SelectFilterCheckboxBtnChecked .SelectFilterCheckIcon { color: #2563eb; }
+@media (prefers-color-scheme: dark) {
+    .SelectFilterCheckboxBtnChecked .SelectFilterCheckIcon { color: #60a5fa; }
+}
+
+/* ── Picker: apply/update button at bottom of sub-view ── */
+.SelectFilterApplyBtn {
+    display: block;
+    width: calc(100% - 28px);
+    margin: 6px 14px;
+    padding: 5px 0;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+}
+.SelectFilterApplyBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.SelectFilterApplyBtn:not(:disabled):hover { background: #1d4ed8; }
+
+/* ── Chip: clickable value label that opens edit picker ── */
+.SelectChipValueBtn {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+.SelectChipValueBtn:hover { opacity: 0.75; }
+
+/* ── Date chip: full-width row in chip bar ── */
+.SelectChipDateRow {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 5px 8px;
+    background: #eff6ff;
+    border-radius: 6px;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    font-size: 0.75rem;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectChipDateRow { background: #1e3a5f; color: #93c5fd; border-color: #1e40af; }
+}
+.SelectChipDateRow select,
+.SelectChipDateRow input[type="date"] {
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    color: inherit;
+    font-size: 0.72rem;
+    padding: 1px 4px;
+    outline: none;
+}
+.SelectChipDateRow input[type="date"] { min-width: 6rem; }
+.SelectChipDatePresets {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+.SelectChipDatePresets button {
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    font-size: 0.67rem;
+    cursor: pointer;
+}
+.SelectChipDatePresets button:hover { background: rgba(37, 99, 235, 0.12); }
+@media (prefers-color-scheme: dark) {
+    .SelectChipDatePresets button:hover { background: rgba(147, 197, 253, 0.12); }
+}
+
 @keyframes contentShow {
     from {
         opacity: 0;
