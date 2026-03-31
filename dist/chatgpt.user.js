@@ -1714,6 +1714,25 @@ html {
       this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1e3 : 3e4;
     }
   }
+  const RATE_LIMIT_HEADERS = [
+    "retry-after",
+    "x-ratelimit-limit-requests",
+    "x-ratelimit-remaining-requests",
+    "x-ratelimit-reset-requests",
+    "x-ratelimit-limit-tokens",
+    "x-ratelimit-remaining-tokens",
+    "x-ratelimit-reset-tokens"
+  ];
+  function logRateLimitHeaders(response) {
+    const found = {};
+    for (const h2 of RATE_LIMIT_HEADERS) {
+      const val = response.headers.get(h2);
+      if (val != null) found[h2] = val;
+    }
+    if (Object.keys(found).length > 0) {
+      console.info("[Exporter] Rate-limit headers:", found);
+    }
+  }
   async function fetchApi(url, options) {
     const accessToken = await getAccessToken();
     const accountId = await getTeamAccountId();
@@ -1726,6 +1745,7 @@ html {
         ...options == null ? void 0 : options.headers
       }
     });
+    logRateLimitHeaders(response);
     if (!response.ok) {
       if (response.status === 429) {
         throw new RateLimitError(response.headers.get("Retry-After"));
@@ -1733,6 +1753,32 @@ html {
       throw new Error(response.statusText);
     }
     return response.json();
+  }
+  async function probeApi() {
+    const accessToken = await getAccessToken();
+    const accountId = await getTeamAccountId();
+    const url = conversationsApi(0, 1);
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "X-Authorization": `Bearer ${accessToken}`,
+        ...accountId ? { "Chatgpt-Account-Id": accountId } : {}
+      }
+    });
+    const rateLimitHeaders = {};
+    for (const h2 of RATE_LIMIT_HEADERS) {
+      const val = response.headers.get(h2);
+      if (val != null) rateLimitHeaders[h2] = val;
+    }
+    if (!response.ok) {
+      if (response.status === 429) {
+        const secs = response.headers.get("retry-after");
+        const ms = secs ? Number.parseInt(secs, 10) * 1e3 : 6e4;
+        return { ok: false, retryAfterMs: ms, rateLimitHeaders };
+      }
+      return { ok: false, rateLimitHeaders };
+    }
+    return { ok: true, rateLimitHeaders };
   }
   async function _fetchSession() {
     const response = await fetch(sessionApi);
@@ -23620,15 +23666,47 @@ ${content2}`;
       }
     }, [loadingMore, apiConversations.length]);
     const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1;
+    const [probeStatus, setProbeStatus] = h$4(null);
+    const [probeRetryAfterSecs, setProbeRetryAfterSecs] = h$4();
+    const [probeHeaders, setProbeHeaders] = h$4({});
+    const runProbe = T$4(async () => {
+      setProbeStatus("testing");
+      try {
+        const result = await probeApi();
+        setProbeHeaders(result.rateLimitHeaders);
+        if (result.ok) {
+          setProbeStatus("ok");
+        } else {
+          setProbeStatus("rate_limited");
+          setProbeRetryAfterSecs(result.retryAfterMs != null ? Math.round(result.retryAfterMs / 1e3) : void 0);
+        }
+      } catch {
+        setProbeStatus("error");
+      }
+    }, []);
+    const probeLabel = probeStatus === "testing" ? "⏳ Testing…" : probeStatus === "ok" ? "✅ API ready" : probeStatus === "rate_limited" ? `🚫 Rate limited${probeRetryAfterSecs != null ? ` · wait ${probeRetryAfterSecs}s` : ""}` : probeStatus === "error" ? "⚠️ Error" : null;
     return /* @__PURE__ */ o$8(k$3, { children: [
       /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f99233281efd08a0, { className: "DialogTitle", children: t2("Export Dialog Title") }),
       /* @__PURE__ */ o$8("div", { className: "flex items-center text-gray-600 dark:text-gray-300 flex justify-between border-b-[1px] pb-3 mb-3 dark:border-gray-700", children: [
         t2("Export from official export file"),
         " (conversations.json) ",
-        exportSource === "API" && /* @__PURE__ */ o$8("button", { className: "btn relative btn-neutral", onClick: () => {
-          var _a;
-          return (_a = fileInputRef.current) == null ? void 0 : _a.click();
-        }, children: /* @__PURE__ */ o$8(IconUpload, { className: "w-4 h-4" }) })
+        /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2", children: [
+          exportSource === "API" && /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "Button neutral",
+              style: { fontSize: "0.72rem", padding: "2px 8px" },
+              disabled: probeStatus === "testing" || processing,
+              title: Object.keys(probeHeaders).length > 0 ? `Rate-limit headers: ${JSON.stringify(probeHeaders)}` : "Check if the API is currently rate-limiting requests",
+              onClick: runProbe,
+              children: probeLabel ?? "Test API"
+            }
+          ),
+          exportSource === "API" && /* @__PURE__ */ o$8("button", { className: "btn relative btn-neutral", onClick: () => {
+            var _a;
+            return (_a = fileInputRef.current) == null ? void 0 : _a.click();
+          }, children: /* @__PURE__ */ o$8(IconUpload, { className: "w-4 h-4" }) })
+        ] })
       ] }),
       /* @__PURE__ */ o$8(
         "input",

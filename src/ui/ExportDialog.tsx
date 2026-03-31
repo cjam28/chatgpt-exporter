@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { useTranslation } from 'react-i18next'
-import { archiveConversation, deleteConversation, fetchAllConversations, fetchConversation, fetchConversationsPage, fetchProjects } from '../api'
+import { archiveConversation, deleteConversation, fetchAllConversations, fetchConversation, fetchConversationsPage, fetchProjects, probeApi } from '../api'
 import { EXPORT_OPERATION_BATCH } from '../constants'
 import { exportAllToHtml } from '../exporter/html'
 import { exportAllToJson, exportAllToOfficialJson } from '../exporter/json'
@@ -1194,16 +1194,65 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
 
     const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1
 
+    // ── API health probe ──────────────────────────────────────────────────────
+    type ProbeStatus = null | 'testing' | 'ok' | 'rate_limited' | 'error'
+    const [probeStatus, setProbeStatus] = useState<ProbeStatus>(null)
+    const [probeRetryAfterSecs, setProbeRetryAfterSecs] = useState<number | undefined>()
+    const [probeHeaders, setProbeHeaders] = useState<Record<string, string>>({})
+
+    const runProbe = useCallback(async () => {
+        setProbeStatus('testing')
+        try {
+            const result = await probeApi()
+            setProbeHeaders(result.rateLimitHeaders)
+            if (result.ok) {
+                setProbeStatus('ok')
+            }
+            else {
+                setProbeStatus('rate_limited')
+                setProbeRetryAfterSecs(result.retryAfterMs != null ? Math.round(result.retryAfterMs / 1000) : undefined)
+            }
+        }
+        catch {
+            setProbeStatus('error')
+        }
+    }, [])
+
+    const probeLabel = probeStatus === 'testing'
+        ? '⏳ Testing…'
+        : probeStatus === 'ok'
+            ? '✅ API ready'
+            : probeStatus === 'rate_limited'
+                ? `🚫 Rate limited${probeRetryAfterSecs != null ? ` · wait ${probeRetryAfterSecs}s` : ''}`
+                : probeStatus === 'error'
+                    ? '⚠️ Error'
+                    : null
+
     return (
         <>
             <Dialog.Title className="DialogTitle">{t('Export Dialog Title')}</Dialog.Title>
             <div className="flex items-center text-gray-600 dark:text-gray-300 flex justify-between border-b-[1px] pb-3 mb-3 dark:border-gray-700">
                 {t('Export from official export file')} (conversations.json)&nbsp;
-                {exportSource === 'API' && (
-                    <button className="btn relative btn-neutral" onClick={() => fileInputRef.current?.click()}>
-                        <IconUpload className="w-4 h-4" />
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {exportSource === 'API' && (
+                        <button
+                            className="Button neutral"
+                            style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                            disabled={probeStatus === 'testing' || processing}
+                            title={Object.keys(probeHeaders).length > 0
+                                ? `Rate-limit headers: ${JSON.stringify(probeHeaders)}`
+                                : 'Check if the API is currently rate-limiting requests'}
+                            onClick={runProbe}
+                        >
+                            {probeLabel ?? 'Test API'}
+                        </button>
+                    )}
+                    {exportSource === 'API' && (
+                        <button className="btn relative btn-neutral" onClick={() => fileInputRef.current?.click()}>
+                            <IconUpload className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
             <input
                 type="file"

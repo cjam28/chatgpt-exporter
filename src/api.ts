@@ -681,6 +681,29 @@ export class RateLimitError extends Error {
     }
 }
 
+/** Header names ChatGPT might use for rate-limit signalling */
+const RATE_LIMIT_HEADERS = [
+    'retry-after',
+    'x-ratelimit-limit-requests',
+    'x-ratelimit-remaining-requests',
+    'x-ratelimit-reset-requests',
+    'x-ratelimit-limit-tokens',
+    'x-ratelimit-remaining-tokens',
+    'x-ratelimit-reset-tokens',
+]
+
+function logRateLimitHeaders(response: Response) {
+    const found: Record<string, string> = {}
+    for (const h of RATE_LIMIT_HEADERS) {
+        const val = response.headers.get(h)
+        if (val != null) found[h] = val
+    }
+    if (Object.keys(found).length > 0) {
+        // eslint-disable-next-line no-console
+        console.info('[Exporter] Rate-limit headers:', found)
+    }
+}
+
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
     const accessToken = await getAccessToken()
     const accountId = await getTeamAccountId()
@@ -694,6 +717,9 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
             ...options?.headers,
         },
     })
+
+    logRateLimitHeaders(response)
+
     if (!response.ok) {
         if (response.status === 429) {
             throw new RateLimitError(response.headers.get('Retry-After'))
@@ -701,6 +727,46 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
         throw new Error(response.statusText)
     }
     return response.json()
+}
+
+/**
+ * Lightweight probe: fetch exactly 1 conversation to check whether the API
+ * is currently accepting requests. Returns a status object that the UI can
+ * display before the user starts a large export.
+ */
+export async function probeApi(): Promise<{
+    ok: boolean
+    retryAfterMs?: number
+    rateLimitHeaders: Record<string, string>
+}> {
+    const accessToken = await getAccessToken()
+    const accountId = await getTeamAccountId()
+    const url = conversationsApi(0, 1)
+
+    const response = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'X-Authorization': `Bearer ${accessToken}`,
+            ...(accountId ? { 'Chatgpt-Account-Id': accountId } : {}),
+        },
+    })
+
+    const rateLimitHeaders: Record<string, string> = {}
+    for (const h of RATE_LIMIT_HEADERS) {
+        const val = response.headers.get(h)
+        if (val != null) rateLimitHeaders[h] = val
+    }
+
+    if (!response.ok) {
+        if (response.status === 429) {
+            const secs = response.headers.get('retry-after')
+            const ms = secs ? Number.parseInt(secs, 10) * 1000 : 60_000
+            return { ok: false, retryAfterMs: ms, rateLimitHeaders }
+        }
+        return { ok: false, rateLimitHeaders }
+    }
+
+    return { ok: true, rateLimitHeaders }
 }
 
 async function _fetchSession(): Promise<ApiSession> {
