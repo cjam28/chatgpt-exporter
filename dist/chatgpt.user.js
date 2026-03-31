@@ -8214,13 +8214,20 @@ html {
     "No results": "No results",
     "Date From": "From",
     "Date To": "To",
-    "Date Filter Label": "Filter by date",
-    "Date Filter Hint": "Filters conversations by the selected timestamp field returned by the API.",
+    "Date Filter Label": "Date",
+    "Date Filter Hint": "Filters by the chosen timestamp field. Leave blank for no date restriction.",
     "Date Filter Field Created": "Created",
     "Date Filter Field Updated": "Updated",
+    "Date Preset 7d": "7d",
+    "Date Preset 30d": "30d",
+    "Date Preset 90d": "90d",
+    "Date Preset Year": "This year",
+    "Clear filter": "Clear",
     "Selected count": "{{count}} selected",
     "Export batch info": "Exports in batches of 100 per download",
-    "Exporting batch": "Exporting batch {{current}} of {{total}}"
+    "Exporting batch": "Exporting batch {{current}} of {{total}}",
+    "Export batches button": "Export ({{n}} downloads)",
+    "Batch progress": "Batch {{current}}/{{total}}"
   };
   const title$7 = "ChatGPT Exporter";
   const ExportHelper$7 = "Exportar";
@@ -22177,57 +22184,92 @@ ${content2}`;
   };
   const DateFilter = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
     const { t: t2 } = useTranslation();
-    return /* @__PURE__ */ o$8("div", { className: "flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300", children: [
-      /* @__PURE__ */ o$8("span", { className: "shrink-0", title: t2("Date Filter Hint"), children: t2("Date Filter Label") }),
-      /* @__PURE__ */ o$8(
-        "select",
-        {
-          className: "Select",
-          value: filterField,
-          disabled,
-          onChange: (e2) => setFilterField(e2.currentTarget.value),
-          style: { minWidth: "5.5rem" },
-          children: [
-            /* @__PURE__ */ o$8("option", { value: "create_time", children: t2("Date Filter Field Created") }),
-            /* @__PURE__ */ o$8("option", { value: "update_time", children: t2("Date Filter Field Updated") })
-          ]
-        }
-      ),
-      /* @__PURE__ */ o$8(
-        "input",
-        {
-          type: "date",
-          className: "Input",
-          value: dateFrom,
-          disabled,
-          onChange: (e2) => setDateFrom(e2.currentTarget.value),
-          style: { maxWidth: "9rem" }
-        }
-      ),
-      /* @__PURE__ */ o$8("span", { className: "shrink-0", children: "–" }),
-      /* @__PURE__ */ o$8(
-        "input",
-        {
-          type: "date",
-          className: "Input",
-          value: dateTo,
-          disabled,
-          onChange: (e2) => setDateTo(e2.currentTarget.value),
-          style: { maxWidth: "9rem" }
-        }
-      ),
-      (dateFrom || dateTo) && /* @__PURE__ */ o$8(
-        "button",
-        {
-          className: "ml-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200",
-          title: "Clear date filter",
-          onClick: () => {
-            setDateFrom("");
-            setDateTo("");
-          },
-          children: "✕"
-        }
-      )
+    const todayStr = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const daysAgoStr = (n2) => {
+      const d2 = /* @__PURE__ */ new Date();
+      d2.setDate(d2.getDate() - n2);
+      return d2.toISOString().slice(0, 10);
+    };
+    const thisYearStr = () => `${(/* @__PURE__ */ new Date()).getFullYear()}-01-01`;
+    const presets = [
+      { key: "Date Preset 7d", from: () => daysAgoStr(7), to: todayStr },
+      { key: "Date Preset 30d", from: () => daysAgoStr(30), to: todayStr },
+      { key: "Date Preset 90d", from: () => daysAgoStr(90), to: todayStr },
+      { key: "Date Preset Year", from: thisYearStr, to: todayStr }
+    ];
+    const hasFilter = !!(dateFrom || dateTo);
+    return /* @__PURE__ */ o$8("div", { className: "mb-3 text-sm text-gray-600 dark:text-gray-300", children: [
+      /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2 mb-1.5", children: [
+        /* @__PURE__ */ o$8("span", { className: "shrink-0 font-medium", title: t2("Date Filter Hint"), children: t2("Date Filter Label") }),
+        /* @__PURE__ */ o$8(
+          "select",
+          {
+            className: "Select",
+            value: filterField,
+            disabled,
+            onChange: (e2) => setFilterField(e2.currentTarget.value),
+            style: { minWidth: "5.5rem" },
+            children: [
+              /* @__PURE__ */ o$8("option", { value: "create_time", children: t2("Date Filter Field Created") }),
+              /* @__PURE__ */ o$8("option", { value: "update_time", children: t2("Date Filter Field Updated") })
+            ]
+          }
+        ),
+        /* @__PURE__ */ o$8("div", { className: "flex items-center gap-1 ml-auto flex-wrap", children: [
+          presets.map((p2) => /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "Button neutral",
+              style: { padding: "2px 7px", fontSize: "0.75rem" },
+              disabled,
+              onClick: () => {
+                setDateFrom(p2.from());
+                setDateTo(p2.to());
+              },
+              children: t2(p2.key)
+            },
+            p2.key
+          )),
+          hasFilter && /* @__PURE__ */ o$8(
+            "button",
+            {
+              className: "Button neutral",
+              style: { padding: "2px 7px", fontSize: "0.75rem" },
+              disabled,
+              onClick: () => {
+                setDateFrom("");
+                setDateTo("");
+              },
+              children: t2("Clear filter")
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ o$8(
+          "input",
+          {
+            type: "date",
+            className: "Input",
+            value: dateFrom,
+            disabled,
+            onChange: (e2) => setDateFrom(e2.currentTarget.value),
+            style: { flex: 1, minWidth: 0 }
+          }
+        ),
+        /* @__PURE__ */ o$8("span", { className: "shrink-0 text-gray-400", children: "–" }),
+        /* @__PURE__ */ o$8(
+          "input",
+          {
+            type: "date",
+            className: "Input",
+            value: dateTo,
+            disabled,
+            onChange: (e2) => setDateTo(e2.currentTarget.value),
+            style: { flex: 1, minWidth: 0 }
+          }
+        )
+      ] })
     ] });
   };
   const ConversationSelect = ({
@@ -22388,7 +22430,7 @@ ${content2}`;
     const [loading, setLoading] = h$4(false);
     const [error2, setError] = h$4("");
     const [processing, setProcessing] = h$4(false);
-    const [selectedProject, setSelectedProject] = h$4(void 0);
+    const [selectedProject, setSelectedProject] = h$4(null);
     const [selected, setSelected] = h$4([]);
     const [exportType, setExportType] = h$4(exportAllOptions[0].label);
     const [dateFrom, setDateFrom] = h$4("");
@@ -22610,8 +22652,7 @@ ${content2}`;
           onChange: onUpload
         }
       ),
-      exportSource === "API" && /* @__PURE__ */ o$8("div", { className: "flex items-center text-gray-600 dark:text-gray-300 flex justify-between mb-3", children: t2("Export from API") }),
-      /* @__PURE__ */ o$8(ProjectSelect, { projects, selected: selectedProject, setSelected: setSelectedProject, disabled: processing }),
+      exportSource === "API" && /* @__PURE__ */ o$8(ProjectSelect, { projects, selected: selectedProject, setSelected: setSelectedProject, disabled: processing }),
       /* @__PURE__ */ o$8(
         DateFilter,
         {
@@ -22639,21 +22680,26 @@ ${content2}`;
         },
         (selectedProject == null ? void 0 : selectedProject.id) ?? "no-project"
       ),
-      selected.length > 0 && !processing && /* @__PURE__ */ o$8("p", { className: "mt-1 text-xs text-gray-400 dark:text-gray-500", children: [
-        t2("Export batch info"),
-        totalBatches > 1 && ` (${totalBatches} downloads)`
-      ] }),
-      /* @__PURE__ */ o$8("div", { className: "flex mt-3", style: { justifyContent: "space-between" }, children: [
-        /* @__PURE__ */ o$8("select", { className: "Select", disabled: processing, value: exportType, onChange: (e2) => setExportType(e2.currentTarget.value), children: exportAllOptions.map(({ label }) => /* @__PURE__ */ o$8("option", { value: label, children: label }, t2(label))) }),
+      /* @__PURE__ */ o$8("div", { className: "flex mt-3 items-center gap-2", children: [
+        /* @__PURE__ */ o$8("select", { className: "Select shrink-0", disabled: processing, value: exportType, onChange: (e2) => setExportType(e2.currentTarget.value), children: exportAllOptions.map(({ label }) => /* @__PURE__ */ o$8("option", { value: label, children: label }, t2(label))) }),
         /* @__PURE__ */ o$8("div", { className: "flex flex-grow" }),
         /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: archiveAll, children: t2("Archive") }),
-        /* @__PURE__ */ o$8("button", { className: "Button red ml-4", disabled: disabled || exportSource === "Local", onClick: deleteAll, children: t2("Delete") }),
-        /* @__PURE__ */ o$8("button", { className: "Button green ml-4", disabled, onClick: exportAll, children: t2("Export") })
+        /* @__PURE__ */ o$8("button", { className: "Button red", disabled: disabled || exportSource === "Local", onClick: deleteAll, children: t2("Delete") }),
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: "Button green",
+            disabled,
+            onClick: exportAll,
+            title: totalBatches > 1 ? `${totalBatches} separate downloads, 100 conversations each` : void 0,
+            children: totalBatches > 1 ? `${t2("Export")} · ${totalBatches} files` : t2("Export")
+          }
+        )
       ] }),
       processing && /* @__PURE__ */ o$8(k$3, { children: [
-        /* @__PURE__ */ o$8("div", { className: "mt-2 mb-1 justify-between flex", children: [
-          /* @__PURE__ */ o$8("span", { className: "truncate mr-8", children: progress.currentName }),
-          /* @__PURE__ */ o$8("span", { className: "shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400", children: progress.totalBatches > 1 ? `Batch ${progress.batchIndex + 1}/${progress.totalBatches} · ${progress.completed}/${progress.total}` : `${progress.completed}/${progress.total}` })
+        /* @__PURE__ */ o$8("div", { className: "mt-2 mb-1 justify-between flex items-center gap-2", children: [
+          /* @__PURE__ */ o$8("span", { className: "truncate text-sm text-gray-600 dark:text-gray-300", children: progress.currentName }),
+          /* @__PURE__ */ o$8("span", { className: "shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400", children: progress.totalBatches > 1 ? `${t2("Batch progress").replace("{{current}}", String(progress.batchIndex + 1)).replace("{{total}}", String(progress.totalBatches))} · ${progress.completed}/${progress.total}` : `${progress.completed}/${progress.total}` })
         ] }),
         /* @__PURE__ */ o$8("div", { className: "w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700", children: /* @__PURE__ */ o$8(
           "div",
