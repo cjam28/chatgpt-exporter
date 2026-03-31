@@ -8214,8 +8214,10 @@ html {
     "No results": "No results",
     "Date From": "From",
     "Date To": "To",
-    "Date Filter Label": "Filter by created date",
-    "Date Filter Hint": "Filters by the chat creation date returned by the API.",
+    "Date Filter Label": "Filter by date",
+    "Date Filter Hint": "Filters conversations by the selected timestamp field returned by the API.",
+    "Date Filter Field Created": "Created",
+    "Date Filter Field Updated": "Updated",
     "Selected count": "{{count}} selected",
     "Export batch info": "Exports in batches of 100 per download",
     "Exporting batch": "Exporting batch {{current}} of {{total}}"
@@ -22133,6 +22135,11 @@ ${content2}`;
     );
   };
   const useSettingContext = () => q$1(SettingContext);
+  function toMs(time) {
+    if (time == null) return 0;
+    if (typeof time === "number") return time * 1e3;
+    return new Date(time).getTime();
+  }
   function chunkArray(arr, size) {
     const result = [];
     for (let i2 = 0; i2 < arr.length; i2 += size) {
@@ -22168,10 +22175,24 @@ ${content2}`;
       )
     ] });
   };
-  const DateFilter = ({ dateFrom, dateTo, setDateFrom, setDateTo, disabled }) => {
+  const DateFilter = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
     const { t: t2 } = useTranslation();
-    return /* @__PURE__ */ o$8("div", { className: "flex items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300", children: [
+    return /* @__PURE__ */ o$8("div", { className: "flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300", children: [
       /* @__PURE__ */ o$8("span", { className: "shrink-0", title: t2("Date Filter Hint"), children: t2("Date Filter Label") }),
+      /* @__PURE__ */ o$8(
+        "select",
+        {
+          className: "Select",
+          value: filterField,
+          disabled,
+          onChange: (e2) => setFilterField(e2.currentTarget.value),
+          style: { minWidth: "5.5rem" },
+          children: [
+            /* @__PURE__ */ o$8("option", { value: "create_time", children: t2("Date Filter Field Created") }),
+            /* @__PURE__ */ o$8("option", { value: "update_time", children: t2("Date Filter Field Updated") })
+          ]
+        }
+      ),
       /* @__PURE__ */ o$8(
         "input",
         {
@@ -22217,7 +22238,8 @@ ${content2}`;
     loading,
     error: error2,
     dateFrom,
-    dateTo
+    dateTo,
+    filterField
   }) => {
     const { t: t2 } = useTranslation();
     const [query2, setQuery] = h$4("");
@@ -22227,15 +22249,19 @@ ${content2}`;
       const q2 = query2.trim().toLowerCase();
       if (q2) result = result.filter((c2) => c2.title.toLowerCase().includes(q2));
       if (dateFrom) {
-        const fromTs = new Date(dateFrom).getTime() / 1e3;
-        if (!Number.isNaN(fromTs)) result = result.filter((c2) => c2.create_time >= fromTs);
+        const fromMs = new Date(dateFrom).getTime();
+        if (!Number.isNaN(fromMs)) {
+          result = result.filter((c2) => toMs(c2[filterField]) >= fromMs);
+        }
       }
       if (dateTo) {
-        const toTs = (/* @__PURE__ */ new Date(`${dateTo}T23:59:59`)).getTime() / 1e3;
-        if (!Number.isNaN(toTs)) result = result.filter((c2) => c2.create_time <= toTs);
+        const toEndMs = (/* @__PURE__ */ new Date(`${dateTo}T23:59:59.999`)).getTime();
+        if (!Number.isNaN(toEndMs)) {
+          result = result.filter((c2) => toMs(c2[filterField]) <= toEndMs);
+        }
       }
       return result;
-    }, [conversations, query2, dateFrom, dateTo]);
+    }, [conversations, query2, dateFrom, dateTo, filterField]);
     const allFilteredSelected = filtered.length > 0 && filtered.every((c2) => selected.some((x2) => x2.id === c2.id));
     return /* @__PURE__ */ o$8(k$3, { children: [
       /* @__PURE__ */ o$8(
@@ -22367,6 +22393,7 @@ ${content2}`;
     const [exportType, setExportType] = h$4(exportAllOptions[0].label);
     const [dateFrom, setDateFrom] = h$4("");
     const [dateTo, setDateTo] = h$4("");
+    const [filterField, setFilterField] = h$4("create_time");
     const disabled = processing || !!error2 || selected.length === 0;
     const requestQueue = F$1(() => new RequestQueue(200, 1600), []);
     const archiveQueue = F$1(() => new RequestQueue(200, 1600), []);
@@ -22590,8 +22617,10 @@ ${content2}`;
         {
           dateFrom,
           dateTo,
+          filterField,
           setDateFrom,
           setDateTo,
+          setFilterField,
           disabled: processing
         }
       ),
@@ -22605,7 +22634,8 @@ ${content2}`;
           loading,
           error: error2,
           dateFrom,
-          dateTo
+          dateTo,
+          filterField
         },
         (selectedProject == null ? void 0 : selectedProject.id) ?? "no-project"
       ),

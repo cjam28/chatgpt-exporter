@@ -49,8 +49,10 @@
   "No results": "No results",
   "Date From": "From",
   "Date To": "To",
-  "Date Filter Label": "Filter by created date",
-  "Date Filter Hint": "Filters by the chat creation date returned by the API.",
+  "Date Filter Label": "Filter by date",
+  "Date Filter Hint": "Filters conversations by the selected timestamp field returned by the API.",
+  "Date Filter Field Created": "Created",
+  "Date Filter Field Updated": "Updated",
   "Selected count": "{{count}} selected",
   "Export batch info": "Exports in batches of 100 per download",
   "Exporting batch": "Exporting batch {{current}} of {{total}}"

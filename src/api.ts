@@ -291,7 +291,10 @@ export type ApiConversationWithId = ApiConversation & {
 export interface ApiConversationItem {
     id: string
     title: string
-    create_time: number
+    /** ISO 8601 string from the list endpoint (e.g. "2025-07-10T14:53:58.103234Z") */
+    create_time: number | string
+    /** ISO 8601 string from the list endpoint */
+    update_time?: number | string
 }
 
 export interface ApiConversations {
