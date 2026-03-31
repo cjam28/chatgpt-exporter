@@ -206,8 +206,21 @@
 }
 
 .SelectItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.SelectItem .CheckBoxLabel {
+    flex: 1;
+    min-width: 0;
+}
+
+.SelectItem .LabelText {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .SelectItem label, .SelectItem input {
@@ -216,6 +229,118 @@
 
 .SelectItem span {
     vertical-align: middle;
+}
+
+.SelectItemMeta {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: #9ca3af;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.SelectChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 12px;
+    border: 1px solid #6f6e77;
+    border-bottom: none;
+}
+
+.SelectChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+    .SelectChip {
+        background: #1e3a5f;
+        color: #93c5fd;
+        border-color: #1e40af;
+    }
+}
+
+.SelectChip input[type="number"] {
+    width: 2.2rem;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    text-align: center;
+    border: none;
+    outline: none;
+    padding: 0;
+}
+
+.SelectChipRemove {
+    cursor: pointer;
+    opacity: 0.6;
+    line-height: 1;
+    padding: 0 2px;
+}
+.SelectChipRemove:hover {
+    opacity: 1;
+    color: #dc2626;
+}
+
+.SelectFilterPopover {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: white;
+    border: 1px solid #6f6e77;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+    .SelectFilterPopover {
+        background: #1f2937;
+        border-color: #374151;
+    }
+}
+
+.SelectFilterOption {
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+}
+
+.SelectFilterOption:hover {
+    background: #f3f4f6;
+}
+
+@media (prefers-color-scheme: dark) {
+    .SelectFilterOption:hover {
+        background: #374151;
+    }
+}
+
+.SelectFilterOption strong {
+    display: block;
+    font-size: 0.82rem;
+}
+
+.SelectFilterOption small {
+    display: block;
+    font-size: 0.7rem;
+    color: #9ca3af;
+    margin-top: 1px;
 }
 
 @keyframes contentShow {
