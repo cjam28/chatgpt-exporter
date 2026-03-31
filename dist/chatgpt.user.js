@@ -22264,8 +22264,8 @@ ${content2}`;
     } };
   }
   const MAX_RETRIES = 5;
-  const MAX_429_RETRIES = 8;
-  const MIN_429_BACKOFF_MS = 3e4;
+  const MAX_GLOBAL_PAUSES = 5;
+  const DEFAULT_429_PAUSE_MS = 6e4;
   class RequestQueue {
     constructor(minBackoff, maxBackoff) {
       __publicField(this, "eventEmitter", EventEmitter());
@@ -22276,6 +22276,14 @@ ${content2}`;
       __publicField(this, "backoff");
       __publicField(this, "total", 0);
       __publicField(this, "completed", 0);
+      /**
+       * Timestamp (ms since epoch) until which the whole queue is frozen after
+       * receiving a 429. While Date.now() < pauseUntil every process() iteration
+       * waits out the remainder before making the next request.
+       */
+      __publicField(this, "pauseUntil", 0);
+      /** How many global rate-limit pauses have been applied so far */
+      __publicField(this, "globalPauses", 0);
       this.minBackoff = minBackoff;
       this.maxBackoff = maxBackoff;
       this.backoff = minBackoff;
@@ -22298,6 +22306,8 @@ ${content2}`;
       this.results = [];
       this.status = "IDLE";
       this.backoff = this.minBackoff;
+      this.pauseUntil = 0;
+      this.globalPauses = 0;
       this.total = 0;
       this.completed = 0;
     }
@@ -22313,6 +22323,13 @@ ${content2}`;
         this.done();
         return;
       }
+      const remaining = this.pauseUntil - Date.now();
+      if (remaining > 0) {
+        const waitSecs = Math.ceil(remaining / 1e3);
+        this.progress(this.queue[0].name, "rate_limited", waitSecs);
+        await sleep(remaining);
+        this.pauseUntil = 0;
+      }
       this.status = "IN_PROGRESS";
       const requestObject = this.queue.shift();
       const { name, request } = requestObject;
@@ -22325,18 +22342,23 @@ ${content2}`;
         this.progress(name, "processing");
         this.backoff = this.minBackoff;
         requestObject.retries = 0;
-        requestObject.rateRetries = 0;
       } catch (error2) {
         if (error2 instanceof RateLimitError) {
-          requestObject.rateRetries++;
-          if (requestObject.rateRetries > MAX_429_RETRIES) {
-            console.warn(`[Exporter] "${name}" skipped after ${MAX_429_RETRIES} rate-limit retries`);
-            waitMs = 0;
-          } else {
-            waitMs = Math.max(error2.retryAfterMs, MIN_429_BACKOFF_MS);
-            this.progress(name, "rate_limited", Math.round(waitMs / 1e3));
-            this.queue.unshift(requestObject);
+          this.globalPauses++;
+          if (this.globalPauses > MAX_GLOBAL_PAUSES) {
+            console.warn("[Exporter] Queue stopped: API rate limit did not clear after", MAX_GLOBAL_PAUSES, "pauses");
+            this.stop();
+            return;
           }
+          const pauseMs = Math.max(
+            error2.retryAfterMs,
+            DEFAULT_429_PAUSE_MS * this.globalPauses
+          );
+          this.pauseUntil = Date.now() + pauseMs;
+          this.progress(name, "rate_limited", Math.round(pauseMs / 1e3));
+          console.warn(`[Exporter] Rate limited (429). Pausing queue for ${Math.round(pauseMs / 1e3)}s (pause #${this.globalPauses})`);
+          this.queue.unshift(requestObject);
+          waitMs = 0;
         } else {
           console.error(`[Exporter] "${name}" failed:`, error2);
           requestObject.retries++;

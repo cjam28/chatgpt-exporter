@@ -27,12 +27,18 @@ interface ProgressEvent {
     rateLimitWaitSecs?: number
 }
 
-/** Max retries for generic (non-429) errors before skipping a request */
+/** Max retries for generic (non-429) errors before skipping a single request */
 const MAX_RETRIES = 5
-/** Max retries specifically for 429 before skipping a request */
-const MAX_429_RETRIES = 8
-/** Minimum ms to wait after a 429 when no Retry-After header is present */
-const MIN_429_BACKOFF_MS = 30_000
+/**
+ * Max times the entire queue can be globally paused for rate limiting before
+ * giving up and stopping the queue entirely.
+ */
+const MAX_GLOBAL_PAUSES = 5
+/**
+ * Default pause length (ms) applied to the whole queue on a 429.
+ * Used when the API does not return a Retry-After header.
+ */
+const DEFAULT_429_PAUSE_MS = 60_000
 
 export class RequestQueue<T> {
     private eventEmitter = EventEmitter<{
@@ -50,6 +56,15 @@ export class RequestQueue<T> {
 
     private total = 0
     private completed = 0
+
+    /**
+     * Timestamp (ms since epoch) until which the whole queue is frozen after
+     * receiving a 429. While Date.now() < pauseUntil every process() iteration
+     * waits out the remainder before making the next request.
+     */
+    private pauseUntil = 0
+    /** How many global rate-limit pauses have been applied so far */
+    private globalPauses = 0
 
     constructor(private minBackoff: number, private maxBackoff: number) {
         this.backoff = minBackoff
@@ -76,6 +91,8 @@ export class RequestQueue<T> {
         this.results = []
         this.status = 'IDLE'
         this.backoff = this.minBackoff
+        this.pauseUntil = 0
+        this.globalPauses = 0
         this.total = 0
         this.completed = 0
     }
@@ -97,6 +114,19 @@ export class RequestQueue<T> {
             return
         }
 
+        // ── Global rate-limit pause ──────────────────────────────────────────
+        // If a previous request set pauseUntil, wait for the remainder before
+        // making any new request. This freezes the whole queue at once instead
+        // of per-item retries, so 100 queued items don't each wait 30s in turn.
+        const remaining = this.pauseUntil - Date.now()
+        if (remaining > 0) {
+            const waitSecs = Math.ceil(remaining / 1000)
+            // Broadcast the pause status for every item currently at the front
+            this.progress(this.queue[0].name, 'rate_limited', waitSecs)
+            await sleep(remaining)
+            this.pauseUntil = 0
+        }
+
         this.status = 'IN_PROGRESS'
         const requestObject = this.queue.shift()!
         const { name, request } = requestObject
@@ -111,20 +141,28 @@ export class RequestQueue<T> {
             this.progress(name, 'processing')
             this.backoff = this.minBackoff // reset on success
             requestObject.retries = 0
-            requestObject.rateRetries = 0
         }
         catch (error) {
             if (error instanceof RateLimitError) {
-                requestObject.rateRetries++
-                if (requestObject.rateRetries > MAX_429_RETRIES) {
-                    console.warn(`[Exporter] "${name}" skipped after ${MAX_429_RETRIES} rate-limit retries`)
-                    waitMs = 0 // skip — don't re-queue
+                this.globalPauses++
+                if (this.globalPauses > MAX_GLOBAL_PAUSES) {
+                    // Rate limit persists even after several long pauses — abort.
+                    console.warn('[Exporter] Queue stopped: API rate limit did not clear after', MAX_GLOBAL_PAUSES, 'pauses')
+                    this.stop()
+                    return
                 }
-                else {
-                    waitMs = Math.max(error.retryAfterMs, MIN_429_BACKOFF_MS)
-                    this.progress(name, 'rate_limited', Math.round(waitMs / 1000))
-                    this.queue.unshift(requestObject) // retry this item next
-                }
+                // Freeze the whole queue. Exponentially increase the pause so
+                // we back off harder if the first pause wasn't long enough.
+                const pauseMs = Math.max(
+                    error.retryAfterMs,
+                    DEFAULT_429_PAUSE_MS * this.globalPauses,
+                )
+                this.pauseUntil = Date.now() + pauseMs
+                this.progress(name, 'rate_limited', Math.round(pauseMs / 1000))
+                console.warn(`[Exporter] Rate limited (429). Pausing queue for ${Math.round(pauseMs / 1000)}s (pause #${this.globalPauses})`)
+                // Put this item back — it will be retried after the pause clears
+                this.queue.unshift(requestObject)
+                waitMs = 0 // the sleep is handled at the top of the next process() call
             }
             else {
                 console.error(`[Exporter] "${name}" failed:`, error)
