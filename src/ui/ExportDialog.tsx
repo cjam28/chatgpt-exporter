@@ -85,48 +85,89 @@ interface DateFilterProps {
 
 const DateFilter: FC<DateFilterProps> = ({ dateFrom, dateTo, filterField, setDateFrom, setDateTo, setFilterField, disabled }) => {
     const { t } = useTranslation()
+
+    const todayStr = () => new Date().toISOString().slice(0, 10)
+    const daysAgoStr = (n: number) => {
+        const d = new Date()
+        d.setDate(d.getDate() - n)
+        return d.toISOString().slice(0, 10)
+    }
+    const thisYearStr = () => `${new Date().getFullYear()}-01-01`
+
+    const presets = [
+        { key: 'Date Preset 7d', from: () => daysAgoStr(7), to: todayStr },
+        { key: 'Date Preset 30d', from: () => daysAgoStr(30), to: todayStr },
+        { key: 'Date Preset 90d', from: () => daysAgoStr(90), to: todayStr },
+        { key: 'Date Preset Year', from: thisYearStr, to: todayStr },
+    ] as const
+
+    const hasFilter = !!(dateFrom || dateTo)
+
     return (
-        <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300">
-            <span className="shrink-0" title={t('Date Filter Hint')}>{t('Date Filter Label')}</span>
-            <select
-                className="Select"
-                value={filterField}
-                disabled={disabled}
-                onChange={e => setFilterField(e.currentTarget.value as DateFilterField)}
-                style={{ minWidth: '5.5rem' }}
-            >
-                <option value="create_time">{t('Date Filter Field Created')}</option>
-                <option value="update_time">{t('Date Filter Field Updated')}</option>
-            </select>
-            <input
-                type="date"
-                className="Input"
-                value={dateFrom}
-                disabled={disabled}
-                onChange={e => setDateFrom(e.currentTarget.value)}
-                style={{ maxWidth: '9rem' }}
-            />
-            <span className="shrink-0">–</span>
-            <input
-                type="date"
-                className="Input"
-                value={dateTo}
-                disabled={disabled}
-                onChange={e => setDateTo(e.currentTarget.value)}
-                style={{ maxWidth: '9rem' }}
-            />
-            {(dateFrom || dateTo) && (
-                <button
-                    className="ml-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                    title="Clear date filter"
-                    onClick={() => {
-                        setDateFrom('')
-                        setDateTo('')
-                    }}
+        <div className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+            {/* Row 1: field selector + quick presets */}
+            <div className="flex items-center gap-2 mb-1.5">
+                <span className="shrink-0 font-medium" title={t('Date Filter Hint')}>{t('Date Filter Label')}</span>
+                <select
+                    className="Select"
+                    value={filterField}
+                    disabled={disabled}
+                    onChange={e => setFilterField(e.currentTarget.value as DateFilterField)}
+                    style={{ minWidth: '5.5rem' }}
                 >
-                    ✕
-                </button>
-            )}
+                    <option value="create_time">{t('Date Filter Field Created')}</option>
+                    <option value="update_time">{t('Date Filter Field Updated')}</option>
+                </select>
+                <div className="flex items-center gap-1 ml-auto flex-wrap">
+                    {presets.map(p => (
+                        <button
+                            key={p.key}
+                            className="Button neutral"
+                            style={{ padding: '2px 7px', fontSize: '0.75rem' }}
+                            disabled={disabled}
+                            onClick={() => {
+                                setDateFrom(p.from())
+                                setDateTo(p.to())
+                            }}
+                        >
+                            {t(p.key)}
+                        </button>
+                    ))}
+                    {hasFilter && (
+                        <button
+                            className="Button neutral"
+                            style={{ padding: '2px 7px', fontSize: '0.75rem' }}
+                            disabled={disabled}
+                            onClick={() => {
+                                setDateFrom('')
+                                setDateTo('')
+                            }}
+                        >
+                            {t('Clear filter')}
+                        </button>
+                    )}
+                </div>
+            </div>
+            {/* Row 2: From – To inputs */}
+            <div className="flex items-center gap-2">
+                <input
+                    type="date"
+                    className="Input"
+                    value={dateFrom}
+                    disabled={disabled}
+                    onChange={e => setDateFrom(e.currentTarget.value)}
+                    style={{ flex: 1, minWidth: 0 }}
+                />
+                <span className="shrink-0 text-gray-400">–</span>
+                <input
+                    type="date"
+                    className="Input"
+                    value={dateTo}
+                    disabled={disabled}
+                    onChange={e => setDateTo(e.currentTarget.value)}
+                    style={{ flex: 1, minWidth: 0 }}
+                />
+            </div>
         </div>
     )
 }
@@ -299,7 +340,9 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [processing, setProcessing] = useState(false)
-    const [selectedProject, setSelectedProject] = useState<ApiProjectInfo | null | undefined>(undefined)
+    // Start with null (no project) so conversations load immediately on dialog open.
+    // undefined means "not yet chosen" and shows the placeholder message.
+    const [selectedProject, setSelectedProject] = useState<ApiProjectInfo | null | undefined>(null)
 
     const [selected, setSelected] = useState<ApiConversationItem[]>([])
     const [exportType, setExportType] = useState(exportAllOptions[0].label)
@@ -559,11 +602,8 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 onChange={onUpload}
             />
             {exportSource === 'API' && (
-                <div className="flex items-center text-gray-600 dark:text-gray-300 flex justify-between mb-3">
-                    {t('Export from API')}
-                </div>
+                <ProjectSelect projects={projects} selected={selectedProject} setSelected={setSelectedProject} disabled={processing} />
             )}
-            <ProjectSelect projects={projects} selected={selectedProject} setSelected={setSelectedProject} disabled={processing} />
             <DateFilter
                 dateFrom={dateFrom}
                 dateTo={dateTo}
@@ -593,14 +633,8 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                         filterField={filterField}
                     />
                     )}
-            {selected.length > 0 && !processing && (
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                    {t('Export batch info')}
-                    {totalBatches > 1 && ` (${totalBatches} downloads)`}
-                </p>
-            )}
-            <div className="flex mt-3" style={{ justifyContent: 'space-between' }}>
-                <select className="Select" disabled={processing} value={exportType} onChange={e => setExportType(e.currentTarget.value)}>
+            <div className="flex mt-3 items-center gap-2">
+                <select className="Select shrink-0" disabled={processing} value={exportType} onChange={e => setExportType(e.currentTarget.value)}>
                     {exportAllOptions.map(({ label }) => (
                         <option key={t(label)} value={label}>{label}</option>
                     ))}
@@ -609,20 +643,25 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 <button className="Button red" disabled={disabled || exportSource === 'Local'} onClick={archiveAll}>
                     {t('Archive')}
                 </button>
-                <button className="Button red ml-4" disabled={disabled || exportSource === 'Local'} onClick={deleteAll}>
+                <button className="Button red" disabled={disabled || exportSource === 'Local'} onClick={deleteAll}>
                     {t('Delete')}
                 </button>
-                <button className="Button green ml-4" disabled={disabled} onClick={exportAll}>
-                    {t('Export')}
+                <button
+                    className="Button green"
+                    disabled={disabled}
+                    onClick={exportAll}
+                    title={totalBatches > 1 ? `${totalBatches} separate downloads, 100 conversations each` : undefined}
+                >
+                    {totalBatches > 1 ? `${t('Export')} \u00B7\u00A0${totalBatches}\u00A0files` : t('Export')}
                 </button>
             </div>
             {processing && (
                 <>
-                    <div className="mt-2 mb-1 justify-between flex">
-                        <span className="truncate mr-8">{progress.currentName}</span>
+                    <div className="mt-2 mb-1 justify-between flex items-center gap-2">
+                        <span className="truncate text-sm text-gray-600 dark:text-gray-300">{progress.currentName}</span>
                         <span className="shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400">
                             {progress.totalBatches > 1
-                                ? `Batch ${progress.batchIndex + 1}/${progress.totalBatches} · ${progress.completed}/${progress.total}`
+                                ? `${t('Batch progress').replace('{{current}}', String(progress.batchIndex + 1)).replace('{{total}}', String(progress.totalBatches))} · ${progress.completed}/${progress.total}`
                                 : `${progress.completed}/${progress.total}`}
                         </span>
                     </div>
