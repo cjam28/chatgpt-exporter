@@ -478,6 +478,59 @@ html {
     color: #9ca3af;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    min-width: 6.5rem;
+    text-align: right;
+}
+.SelectItemMetaActive {
+    color: #6b7280;
+    font-weight: 600;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectItemMetaActive { color: #d1d5db; }
+}
+
+/* \u2500\u2500 Sortable column header row \u2500\u2500 */
+.SelectListHeader {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border: 1px solid #6f6e77;
+    border-bottom: none;
+    background: #f9fafb;
+    user-select: none;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectListHeader { background: #1f2937; }
+}
+.SelectListHeaderCell {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #9ca3af;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    padding: 5px 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 6.5rem;
+    text-align: right;
+}
+.SelectListHeaderCell:hover { color: #374151; }
+@media (prefers-color-scheme: dark) {
+    .SelectListHeaderCell:hover { color: #e5e7eb; }
+}
+.SelectListHeaderCellTitle {
+    flex: 1;
+    text-align: left;
+    padding-left: 28px; /* align with checkbox label */
+}
+.SelectListHeaderCellActive {
+    color: #2563eb;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectListHeaderCellActive { color: #60a5fa; }
 }
 
 .SelectChips {
@@ -22662,15 +22715,13 @@ ${content2}`;
     return result;
   }
   function formatConvDate(time) {
-    if (!time) return "";
+    if (!time) return "—";
     const ms = typeof time === "number" ? time * 1e3 : new Date(time).getTime();
-    if (Number.isNaN(ms)) return "";
+    if (Number.isNaN(ms) || ms === 0) return "—";
     const d2 = new Date(ms);
     const diffDays = Math.floor((Date.now() - ms) / 864e5);
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffDays < 365) return d2.toLocaleDateString(void 0, { month: "short", day: "numeric" });
     return d2.toLocaleDateString(void 0, { year: "numeric", month: "short", day: "numeric" });
   }
   function textSearch(title2, query2) {
@@ -22872,6 +22923,8 @@ ${content2}`;
     const searchInputRef = _(null);
     const skipNextBlur = _(false);
     const [skipFirst, setSkipFirst] = h$4(0);
+    const [sortField, setSortField] = h$4("create_time");
+    const [sortDir, setSortDir] = h$4("desc");
     const originSubOptions = F$1(() => {
       const map2 = /* @__PURE__ */ new Map();
       for (const c2 of conversations) {
@@ -22907,8 +22960,17 @@ ${content2}`;
       let result = conversations;
       const q2 = query2.trim().replace(/#$/, "").trim();
       if (q2) result = result.filter((c2) => textSearch(c2.title, q2));
-      return applyChips(result, chips, chipLogic, projects);
-    }, [conversations, query2, chips, chipLogic, projects]);
+      result = applyChips(result, chips, chipLogic, projects);
+      const dir = sortDir === "asc" ? 1 : -1;
+      return [...result].sort((a2, b2) => {
+        if (sortField === "title") {
+          return dir * (a2.title ?? "").localeCompare(b2.title ?? "");
+        }
+        const aMs = toMs(sortField === "update_time" ? a2.update_time : a2.create_time);
+        const bMs = toMs(sortField === "update_time" ? b2.update_time : b2.create_time);
+        return dir * (aMs - bMs);
+      });
+    }, [conversations, query2, chips, chipLogic, projects, sortField, sortDir]);
     const allFilteredSelected = filtered.length > 0 && filtered.every((c2) => selected.some((x2) => x2.id === c2.id));
     const nonDateChips = F$1(() => chips.filter((c2) => c2.type !== "date"), [chips]);
     const updateChip = T$4((index2, updated) => {
@@ -23368,6 +23430,62 @@ ${content2}`;
           ] })
         ] })
       ] }),
+      /* @__PURE__ */ o$8("div", { className: "SelectListHeader", children: [
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: `SelectListHeaderCell SelectListHeaderCellTitle${sortField === "title" ? " SelectListHeaderCellActive" : ""}`,
+            onClick: () => {
+              if (sortField === "title") {
+                setSortDir((d2) => d2 === "asc" ? "desc" : "asc");
+              } else {
+                setSortField("title");
+                setSortDir("asc");
+              }
+            },
+            children: [
+              "Title ",
+              sortField === "title" ? sortDir === "asc" ? "↑" : "↓" : "↕"
+            ]
+          }
+        ),
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: `SelectListHeaderCell${sortField === "create_time" ? " SelectListHeaderCellActive" : ""}`,
+            onClick: () => {
+              if (sortField === "create_time") {
+                setSortDir((d2) => d2 === "asc" ? "desc" : "asc");
+              } else {
+                setSortField("create_time");
+                setSortDir("desc");
+              }
+            },
+            children: [
+              "Created ",
+              sortField === "create_time" ? sortDir === "asc" ? "↑" : "↓" : "↕"
+            ]
+          }
+        ),
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: `SelectListHeaderCell${sortField === "update_time" ? " SelectListHeaderCellActive" : ""}`,
+            onClick: () => {
+              if (sortField === "update_time") {
+                setSortDir((d2) => d2 === "asc" ? "desc" : "asc");
+              } else {
+                setSortField("update_time");
+                setSortDir("desc");
+              }
+            },
+            children: [
+              "Updated ",
+              sortField === "update_time" ? sortDir === "asc" ? "↑" : "↓" : "↕"
+            ]
+          }
+        )
+      ] }),
       /* @__PURE__ */ o$8("ul", { className: "SelectList", children: [
         loading && conversations.length === 0 && /* @__PURE__ */ o$8("li", { className: "SelectItem", children: [
           t2("Loading"),
@@ -23412,8 +23530,23 @@ ${content2}`;
                     }
                   }
                 ),
-                /* @__PURE__ */ o$8("span", { className: "SelectItemMeta", children: formatConvDate(c2.create_time) }),
-                c2.is_starred && /* @__PURE__ */ o$8("span", { title: "Starred", style: { color: "#f59e0b", flexShrink: 0 }, children: "★" })
+                c2.is_starred && /* @__PURE__ */ o$8("span", { title: "Starred", style: { color: "#f59e0b", flexShrink: 0 }, children: "★" }),
+                /* @__PURE__ */ o$8(
+                  "span",
+                  {
+                    className: `SelectItemMeta${sortField === "create_time" ? " SelectItemMetaActive" : ""}`,
+                    title: `Created: ${c2.create_time ?? "—"}`,
+                    children: formatConvDate(c2.create_time)
+                  }
+                ),
+                /* @__PURE__ */ o$8(
+                  "span",
+                  {
+                    className: `SelectItemMeta${sortField === "update_time" ? " SelectItemMetaActive" : ""}`,
+                    title: `Updated: ${c2.update_time ?? "—"}`,
+                    children: formatConvDate(c2.update_time)
+                  }
+                )
               ]
             },
             c2.id

@@ -43,17 +43,16 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     return result
 }
 
-/** Compact relative date label for conversation list rows */
+/** Compact date label — always includes year to avoid ambiguity */
 function formatConvDate(time: number | string | undefined): string {
-    if (!time) return ''
+    if (!time) return '—'
     const ms = typeof time === 'number' ? time * 1000 : new Date(time).getTime()
-    if (Number.isNaN(ms)) return ''
+    if (Number.isNaN(ms) || ms === 0) return '—'
     const d = new Date(ms)
     const diffDays = Math.floor((Date.now() - ms) / 86_400_000)
     if (diffDays === 0) return 'Today'
     if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays}d ago`
-    if (diffDays < 365) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    // Always show the year so "Jun 17" vs "Jun 17, 2025" confusion is impossible
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -351,6 +350,10 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     const skipNextBlur = useRef(false)
     /** Offset for the "Next 100 from #N" resume control */
     const [skipFirst, setSkipFirst] = useState(0)
+    /** Column the list is currently sorted by */
+    const [sortField, setSortField] = useState<'title' | 'create_time' | 'update_time'>('create_time')
+    /** Sort direction for the active column */
+    const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
 
     // ── Dynamic sub-options ──
 
@@ -399,8 +402,18 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
         let result = conversations
         const q = query.trim().replace(/#$/, '').trim()
         if (q) result = result.filter(c => textSearch(c.title, q))
-        return applyChips(result, chips, chipLogic, projects)
-    }, [conversations, query, chips, chipLogic, projects])
+        result = applyChips(result, chips, chipLogic, projects)
+        // Apply user-chosen sort
+        const dir = sortDir === 'asc' ? 1 : -1
+        return [...result].sort((a, b) => {
+            if (sortField === 'title') {
+                return dir * (a.title ?? '').localeCompare(b.title ?? '')
+            }
+            const aMs = toMs(sortField === 'update_time' ? a.update_time : a.create_time)
+            const bMs = toMs(sortField === 'update_time' ? b.update_time : b.create_time)
+            return dir * (aMs - bMs)
+        })
+    }, [conversations, query, chips, chipLogic, projects, sortField, sortDir])
 
     const allFilteredSelected = filtered.length > 0 && filtered.every(c => selected.some(x => x.id === c.id))
 
@@ -861,6 +874,52 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                 </div>
             </div>
 
+            {/* ── Column headers with sort controls ── */}
+            <div className="SelectListHeader">
+                <button
+                    className={`SelectListHeaderCell SelectListHeaderCellTitle${sortField === 'title' ? ' SelectListHeaderCellActive' : ''}`}
+                    onClick={() => {
+                        if (sortField === 'title') {
+                            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+                        }
+                        else {
+                            setSortField('title')
+                            setSortDir('asc')
+                        }
+                    }}
+                >
+                    Title {sortField === 'title' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                </button>
+                <button
+                    className={`SelectListHeaderCell${sortField === 'create_time' ? ' SelectListHeaderCellActive' : ''}`}
+                    onClick={() => {
+                        if (sortField === 'create_time') {
+                            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+                        }
+                        else {
+                            setSortField('create_time')
+                            setSortDir('desc')
+                        }
+                    }}
+                >
+                    Created {sortField === 'create_time' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                </button>
+                <button
+                    className={`SelectListHeaderCell${sortField === 'update_time' ? ' SelectListHeaderCellActive' : ''}`}
+                    onClick={() => {
+                        if (sortField === 'update_time') {
+                            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+                        }
+                        else {
+                            setSortField('update_time')
+                            setSortDir('desc')
+                        }
+                    }}
+                >
+                    Updated {sortField === 'update_time' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                </button>
+            </div>
+
             {/* ── Conversation list ── */}
             <ul className="SelectList">
                 {loading && conversations.length === 0 && <li className="SelectItem">{t('Loading')}...</li>}
@@ -896,8 +955,19 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                                     setSelected(checked ? [...selected, c] : selected.filter(x => x.id !== c.id))
                                 }}
                             />
-                            <span className="SelectItemMeta">{formatConvDate(c.create_time)}</span>
                             {c.is_starred && <span title="Starred" style={{ color: '#f59e0b', flexShrink: 0 }}>★</span>}
+                            <span
+                                className={`SelectItemMeta${sortField === 'create_time' ? ' SelectItemMetaActive' : ''}`}
+                                title={`Created: ${c.create_time ?? '—'}`}
+                            >
+                                {formatConvDate(c.create_time)}
+                            </span>
+                            <span
+                                className={`SelectItemMeta${sortField === 'update_time' ? ' SelectItemMetaActive' : ''}`}
+                                title={`Updated: ${c.update_time ?? '—'}`}
+                            >
+                                {formatConvDate(c.update_time)}
+                            </span>
                         </li>
                     )
                 })}

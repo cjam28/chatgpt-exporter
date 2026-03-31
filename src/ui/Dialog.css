@@ -237,6 +237,59 @@
     color: #9ca3af;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    min-width: 6.5rem;
+    text-align: right;
+}
+.SelectItemMetaActive {
+    color: #6b7280;
+    font-weight: 600;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectItemMetaActive { color: #d1d5db; }
+}
+
+/* ── Sortable column header row ── */
+.SelectListHeader {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border: 1px solid #6f6e77;
+    border-bottom: none;
+    background: #f9fafb;
+    user-select: none;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectListHeader { background: #1f2937; }
+}
+.SelectListHeaderCell {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #9ca3af;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    padding: 5px 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 6.5rem;
+    text-align: right;
+}
+.SelectListHeaderCell:hover { color: #374151; }
+@media (prefers-color-scheme: dark) {
+    .SelectListHeaderCell:hover { color: #e5e7eb; }
+}
+.SelectListHeaderCellTitle {
+    flex: 1;
+    text-align: left;
+    padding-left: 28px; /* align with checkbox label */
+}
+.SelectListHeaderCellActive {
+    color: #2563eb;
+}
+@media (prefers-color-scheme: dark) {
+    .SelectListHeaderCellActive { color: #60a5fa; }
 }
 
 .SelectChips {
