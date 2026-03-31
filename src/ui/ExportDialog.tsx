@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { useTranslation } from 'react-i18next'
-import { archiveConversation, deleteConversation, fetchAllConversations, fetchAllConversationsAll, fetchConversation, fetchProjects } from '../api'
+import { archiveConversation, deleteConversation, fetchAllConversations, fetchAllConversationsAll, fetchConversation, fetchConversationsPage, fetchProjects } from '../api'
 import { EXPORT_OPERATION_BATCH } from '../constants'
 import { exportAllToHtml } from '../exporter/html'
 import { exportAllToJson, exportAllToOfficialJson } from '../exporter/json'
@@ -491,6 +491,11 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
     const [filterField, setFilterField] = useState<DateFilterField>('create_time')
     const disabled = processing || !!error || selected.length === 0
 
+    // "Load more" state — tracks whether additional pages exist beyond the initial fetch
+    const [hasMore, setHasMore] = useState(false)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [totalAvailable, setTotalAvailable] = useState<number | null>(null)
+
     const requestQueue = useMemo(() => new RequestQueue<ApiConversationWithId>(200, 1600), [])
     const archiveQueue = useMemo(() => new RequestQueue<boolean>(200, 1600), [])
     const deleteQueue = useMemo(() => new RequestQueue<boolean>(200, 1600), [])
@@ -708,11 +713,14 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         if (selectedProject === undefined) return
         setSelected([])
         setApiConversations([])
+        setHasMore(false)
+        setTotalAvailable(null)
         setLoading(true)
         const onBatch = (batch: ApiConversationItem[]) => setApiConversations(prev => [...prev, ...batch])
         const fetcher = selectedProject?.id === ALL_PROJECTS_ID
             ? fetchAllConversationsAll(projects, exportAllLimit, onBatch)
-            : fetchAllConversations(selectedProject?.id ?? null, exportAllLimit, onBatch)
+                .then(() => setHasMore(false)) // all-projects mode fetches everything; no paging
+            : fetchAllConversations(selectedProject?.id ?? null, exportAllLimit, onBatch, setHasMore)
         fetcher
             .catch((err: Error) => {
                 console.error('Error fetching conversations:', err)
@@ -720,6 +728,28 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             })
             .finally(() => setLoading(false))
     }, [selectedProject, exportAllLimit, projects])
+
+    const loadMore = useCallback(async () => {
+        if (loadingMore) return
+        setLoadingMore(true)
+        try {
+            const projectId = selectedProject?.id === ALL_PROJECTS_ID ? null : (selectedProject?.id ?? null)
+            const page = await fetchConversationsPage(projectId, apiConversations.length, EXPORT_OPERATION_BATCH)
+            setApiConversations(prev => [...prev, ...page.items])
+            if (page.total !== null) setTotalAvailable(page.total)
+            // Still more if we got a full page AND haven't reached the reported total
+            setHasMore(
+                page.items.length >= EXPORT_OPERATION_BATCH
+                && (page.total === null || apiConversations.length + page.items.length < page.total),
+            )
+        }
+        catch (err) {
+            console.error('loadMore error', err)
+        }
+        finally {
+            setLoadingMore(false)
+        }
+    }, [loadingMore, selectedProject, apiConversations.length])
 
     const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1
 
@@ -773,6 +803,28 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                         filterField={filterField}
                     />
                     )}
+            {/* Load-more button — only shown for API source when more pages exist */}
+            {exportSource === 'API' && !loading && !processing && hasMore && (
+                <div className="flex items-center justify-center mt-2 mb-1 gap-2">
+                    <button
+                        className="Button neutral"
+                        style={{ fontSize: '0.8rem', padding: '4px 14px' }}
+                        disabled={loadingMore}
+                        onClick={loadMore}
+                    >
+                        {loadingMore
+                            ? `${t('Loading')}...`
+                            : totalAvailable !== null
+                                ? t('Load more conversations remaining', { n: EXPORT_OPERATION_BATCH, remaining: totalAvailable - apiConversations.length })
+                                : t('Load more conversations', { n: EXPORT_OPERATION_BATCH })}
+                    </button>
+                    {totalAvailable !== null && !loadingMore && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+                            {apiConversations.length} / {totalAvailable}
+                        </span>
+                    )}
+                </div>
+            )}
             <div className="flex mt-3 items-center gap-2">
                 <select className="Select shrink-0" disabled={processing} value={exportType} onChange={e => setExportType(e.currentTarget.value)}>
                     {exportAllOptions.map(({ label }) => (

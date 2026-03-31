@@ -1457,26 +1457,29 @@ html {
       cursor: nextCursor ?? null
     };
   }
-  async function fetchAllConversations(project = null, maxConversations = 1e3, onBatch) {
+  async function fetchConversationsPage(project, offset, limit) {
+    return fetchConversations(offset, limit, project);
+  }
+  async function fetchAllConversations(project = null, maxConversations = 1e3, onBatch, onHasMore) {
     const conversations = [];
     const limit = project === null ? 100 : 50;
     let offset = 0;
     let cursor = 0;
     while (true) {
       try {
-        const result = project === null ? await fetchConversations(offset, limit) : await fetchProjectConversations(project, cursor, limit);
-        if (!result.items) {
+        const result2 = project === null ? await fetchConversations(offset, limit) : await fetchProjectConversations(project, cursor, limit);
+        if (!result2.items) {
           console.warn("fetchAllConversations received no items at offset:", offset);
           break;
         }
-        conversations.push(...result.items);
-        if (result.items.length === 0) break;
-        onBatch == null ? void 0 : onBatch(result.items);
-        if (result.total == null && result.cursor == null) break;
-        if (result.total !== null && offset + limit >= result.total) break;
+        conversations.push(...result2.items);
+        if (result2.items.length === 0) break;
+        onBatch == null ? void 0 : onBatch(result2.items);
+        if (result2.total == null && result2.cursor == null) break;
+        if (result2.total !== null && offset + limit >= result2.total) break;
         if (conversations.length >= maxConversations) break;
-        if (result.cursor != null) {
-          cursor = result.cursor;
+        if (result2.cursor != null) {
+          cursor = result2.cursor;
         } else {
           offset += limit;
         }
@@ -1485,7 +1488,9 @@ html {
         break;
       }
     }
-    return conversations.slice(0, maxConversations);
+    const result = conversations.slice(0, maxConversations);
+    onHasMore == null ? void 0 : onHasMore(result.length >= maxConversations);
+    return result;
   }
   async function fetchAllConversationsAll(projects, maxConversations = 1e3, onBatch) {
     const seen = /* @__PURE__ */ new Set();
@@ -8378,7 +8383,9 @@ html {
     "Filter chip regular desc": "Chats without a custom GPT or project",
     "Filter chip active span": "⏱ Active ≥",
     "Filter chip active suffix": "d",
-    "Filters hint": "type # to add filters"
+    "Filters hint": "type # to add filters",
+    "Load more conversations": "Load {{n}} more",
+    "Load more conversations remaining": "Load {{n}} more · {{remaining}} left"
   };
   const title$7 = "ChatGPT Exporter";
   const ExportHelper$7 = "Exportar";
@@ -22703,6 +22710,9 @@ ${content2}`;
     const [dateTo, setDateTo] = h$4("");
     const [filterField, setFilterField] = h$4("create_time");
     const disabled = processing || !!error2 || selected.length === 0;
+    const [hasMore, setHasMore] = h$4(false);
+    const [loadingMore, setLoadingMore] = h$4(false);
+    const [totalAvailable, setTotalAvailable] = h$4(null);
     const requestQueue = F$1(() => new RequestQueue(200, 1600), []);
     const archiveQueue = F$1(() => new RequestQueue(200, 1600), []);
     const deleteQueue = F$1(() => new RequestQueue(200, 1600), []);
@@ -22887,14 +22897,33 @@ ${content2}`;
       if (selectedProject === void 0) return;
       setSelected([]);
       setApiConversations([]);
+      setHasMore(false);
+      setTotalAvailable(null);
       setLoading(true);
       const onBatch = (batch) => setApiConversations((prev) => [...prev, ...batch]);
-      const fetcher = (selectedProject == null ? void 0 : selectedProject.id) === ALL_PROJECTS_ID ? fetchAllConversationsAll(projects, exportAllLimit, onBatch) : fetchAllConversations((selectedProject == null ? void 0 : selectedProject.id) ?? null, exportAllLimit, onBatch);
+      const fetcher = (selectedProject == null ? void 0 : selectedProject.id) === ALL_PROJECTS_ID ? fetchAllConversationsAll(projects, exportAllLimit, onBatch).then(() => setHasMore(false)) : fetchAllConversations((selectedProject == null ? void 0 : selectedProject.id) ?? null, exportAllLimit, onBatch, setHasMore);
       fetcher.catch((err) => {
         console.error("Error fetching conversations:", err);
         setError(err.message || "Failed to load conversations");
       }).finally(() => setLoading(false));
     }, [selectedProject, exportAllLimit, projects]);
+    const loadMore = T$4(async () => {
+      if (loadingMore) return;
+      setLoadingMore(true);
+      try {
+        const projectId = (selectedProject == null ? void 0 : selectedProject.id) === ALL_PROJECTS_ID ? null : (selectedProject == null ? void 0 : selectedProject.id) ?? null;
+        const page = await fetchConversationsPage(projectId, apiConversations.length, EXPORT_OPERATION_BATCH);
+        setApiConversations((prev) => [...prev, ...page.items]);
+        if (page.total !== null) setTotalAvailable(page.total);
+        setHasMore(
+          page.items.length >= EXPORT_OPERATION_BATCH && (page.total === null || apiConversations.length + page.items.length < page.total)
+        );
+      } catch (err) {
+        console.error("loadMore error", err);
+      } finally {
+        setLoadingMore(false);
+      }
+    }, [loadingMore, selectedProject, apiConversations.length]);
     const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1;
     return /* @__PURE__ */ o$8(k$3, { children: [
       /* @__PURE__ */ o$8($5d3850c4d0b4e6c7$export$f99233281efd08a0, { className: "DialogTitle", children: t2("Export Dialog Title") }),
@@ -22944,6 +22973,23 @@ ${content2}`;
         },
         (selectedProject == null ? void 0 : selectedProject.id) ?? "no-project"
       ),
+      exportSource === "API" && !loading && !processing && hasMore && /* @__PURE__ */ o$8("div", { className: "flex items-center justify-center mt-2 mb-1 gap-2", children: [
+        /* @__PURE__ */ o$8(
+          "button",
+          {
+            className: "Button neutral",
+            style: { fontSize: "0.8rem", padding: "4px 14px" },
+            disabled: loadingMore,
+            onClick: loadMore,
+            children: loadingMore ? `${t2("Loading")}...` : totalAvailable !== null ? t2("Load more conversations remaining", { n: EXPORT_OPERATION_BATCH, remaining: totalAvailable - apiConversations.length }) : t2("Load more conversations", { n: EXPORT_OPERATION_BATCH })
+          }
+        ),
+        totalAvailable !== null && !loadingMore && /* @__PURE__ */ o$8("span", { className: "text-xs text-gray-400 dark:text-gray-500 tabular-nums", children: [
+          apiConversations.length,
+          " / ",
+          totalAvailable
+        ] })
+      ] }),
       /* @__PURE__ */ o$8("div", { className: "flex mt-3 items-center gap-2", children: [
         /* @__PURE__ */ o$8("select", { className: "Select shrink-0", disabled: processing, value: exportType, onChange: (e2) => setExportType(e2.currentTarget.value), children: exportAllOptions.map(({ label }) => /* @__PURE__ */ o$8("option", { value: label, children: label }, t2(label))) }),
         /* @__PURE__ */ o$8("div", { className: "flex flex-grow" }),
