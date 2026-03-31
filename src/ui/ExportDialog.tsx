@@ -2,16 +2,26 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { useTranslation } from 'react-i18next'
 import { archiveConversation, deleteConversation, fetchAllConversations, fetchConversation, fetchProjects } from '../api'
+import { EXPORT_OPERATION_BATCH } from '../constants'
 import { exportAllToHtml } from '../exporter/html'
 import { exportAllToJson, exportAllToOfficialJson } from '../exporter/json'
 import { exportAllToMarkdown } from '../exporter/markdown'
 import { RequestQueue } from '../utils/queue'
+import { sleep } from '../utils/utils'
 import { CheckBox } from './CheckBox'
 import { IconCross, IconLoading, IconUpload } from './Icons'
 import { useSettingContext } from './SettingContext'
 import type { ApiConversationItem, ApiConversationWithId, ApiProjectInfo } from '../api'
 import type { FC } from '../type'
 import type { ChangeEvent } from 'preact/compat'
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+    const result: T[][] = []
+    for (let i = 0; i < arr.length; i += size) {
+        result.push(arr.slice(i, i + size))
+    }
+    return result
+}
 
 interface ProjectSelectProps {
     projects: ApiProjectInfo[]
@@ -50,7 +60,51 @@ const ProjectSelect: FC<ProjectSelectProps> = ({ projects, selected, setSelected
     )
 }
 
-const EXPORT_LIMIT = 100
+interface DateFilterProps {
+    dateFrom: string
+    dateTo: string
+    setDateFrom: (v: string) => void
+    setDateTo: (v: string) => void
+    disabled: boolean
+}
+
+const DateFilter: FC<DateFilterProps> = ({ dateFrom, dateTo, setDateFrom, setDateTo, disabled }) => {
+    const { t } = useTranslation()
+    return (
+        <div className="flex items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-300">
+            <span className="shrink-0" title={t('Date Filter Hint')}>{t('Date Filter Label')}</span>
+            <input
+                type="date"
+                className="Input"
+                value={dateFrom}
+                disabled={disabled}
+                onChange={e => setDateFrom(e.currentTarget.value)}
+                style={{ maxWidth: '9rem' }}
+            />
+            <span className="shrink-0">–</span>
+            <input
+                type="date"
+                className="Input"
+                value={dateTo}
+                disabled={disabled}
+                onChange={e => setDateTo(e.currentTarget.value)}
+                style={{ maxWidth: '9rem' }}
+            />
+            {(dateFrom || dateTo) && (
+                <button
+                    className="ml-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    title="Clear date filter"
+                    onClick={() => {
+                        setDateFrom('')
+                        setDateTo('')
+                    }}
+                >
+                    ✕
+                </button>
+            )}
+        </div>
+    )
+}
 
 interface ConversationSelectProps {
     conversations: ApiConversationItem[]
@@ -59,6 +113,8 @@ interface ConversationSelectProps {
     disabled: boolean
     loading: boolean
     error: string
+    dateFrom: string
+    dateTo: string
 }
 
 const ConversationSelect: FC<ConversationSelectProps> = ({
@@ -68,20 +124,31 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
     disabled,
     loading,
     error,
+    dateFrom,
+    dateTo,
 }) => {
     const { t } = useTranslation()
     const [query, setQuery] = useState('')
     const lastClickedIndex = useRef<number>(-1)
 
     const filtered = useMemo(() => {
+        let result = conversations
         const q = query.trim().toLowerCase()
-        if (!q) return conversations
-        return conversations.filter(c => c.title.toLowerCase().includes(q))
-    }, [conversations, query])
+        if (q) result = result.filter(c => c.title.toLowerCase().includes(q))
+        if (dateFrom) {
+            const fromTs = new Date(dateFrom).getTime() / 1000
+            if (!Number.isNaN(fromTs)) result = result.filter(c => c.create_time >= fromTs)
+        }
+        if (dateTo) {
+            // Include the full day by treating dateTo as end-of-day
+            const toTs = new Date(`${dateTo}T23:59:59`).getTime() / 1000
+            if (!Number.isNaN(toTs)) result = result.filter(c => c.create_time <= toTs)
+        }
+        return result
+    }, [conversations, query, dateFrom, dateTo])
 
-    const atCap = selected.length >= EXPORT_LIMIT
     const allFilteredSelected = filtered.length > 0
-        && filtered.slice(0, EXPORT_LIMIT).every(c => selected.some(x => x.id === c.id))
+        && filtered.every(c => selected.some(x => x.id === c.id))
 
     return (
         <>
@@ -102,7 +169,7 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                     checked={allFilteredSelected}
                     onCheckedChange={(checked) => {
                         lastClickedIndex.current = -1
-                        setSelected(checked ? filtered.slice(0, EXPORT_LIMIT) : [])
+                        setSelected(checked ? filtered : [])
                     }}
                 />
                 <div className="flex items-center gap-2 ml-auto">
@@ -115,12 +182,12 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                     <button
                         className="Button neutral"
                         disabled={disabled || conversations.length === 0}
-                        onClick={() => setSelected(conversations.slice(0, EXPORT_LIMIT))}
+                        onClick={() => setSelected(filtered.slice(0, EXPORT_OPERATION_BATCH))}
                     >
                         {t('Last 100')}
                     </button>
-                    <span className={`text-sm font-medium tabular-nums ${atCap ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                        {selected.length}/{EXPORT_LIMIT}
+                    <span className="text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400">
+                        {selected.length} / {filtered.length}
                     </span>
                 </div>
             </div>
@@ -129,13 +196,12 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                 {error && <li className="SelectItem">{t('Error')}: {error}</li>}
                 {filtered.map((c, index) => {
                     const isSelected = selected.some(x => x.id === c.id)
-                    const itemDisabled = disabled || (atCap && !isSelected)
                     return (
                         <li
                             className="SelectItem"
                             key={c.id}
                             onClickCapture={(e: MouseEvent) => {
-                                if (itemDisabled) return
+                                if (disabled) return
                                 if (e.shiftKey && lastClickedIndex.current !== -1) {
                                     e.preventDefault()
                                     const start = Math.min(lastClickedIndex.current, index)
@@ -144,7 +210,6 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                                     const newSelected = [...selected]
                                     for (const item of rangeItems) {
                                         if (!newSelected.some(x => x.id === item.id)) {
-                                            if (newSelected.length >= EXPORT_LIMIT) break
                                             newSelected.push(item)
                                         }
                                     }
@@ -156,10 +221,9 @@ const ConversationSelect: FC<ConversationSelectProps> = ({
                         >
                             <CheckBox
                                 label={c.title}
-                                disabled={itemDisabled}
+                                disabled={disabled}
                                 checked={isSelected}
                                 onCheckedChange={(checked) => {
-                                    if (checked && atCap) return
                                     setSelected(checked
                                         ? [...selected, c]
                                         : selected.filter(x => x.id !== c.id),
@@ -208,17 +272,27 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
 
     const [selected, setSelected] = useState<ApiConversationItem[]>([])
     const [exportType, setExportType] = useState(exportAllOptions[0].label)
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const disabled = processing || !!error || selected.length === 0
 
     const requestQueue = useMemo(() => new RequestQueue<ApiConversationWithId>(200, 1600), [])
     const archiveQueue = useMemo(() => new RequestQueue<boolean>(200, 1600), [])
     const deleteQueue = useMemo(() => new RequestQueue<boolean>(200, 1600), [])
+
     const [progress, setProgress] = useState({
         total: 0,
         completed: 0,
         currentName: '',
         currentStatus: '',
+        batchIndex: 0,
+        totalBatches: 0,
     })
+
+    // Refs tracking wave-based batch state across async event handlers
+    const pendingBatchesRef = useRef<ApiConversationItem[][]>([])
+    const batchIndexRef = useRef(0)
+    const totalBatchesRef = useRef(0)
 
     const onUpload = useCallback((e: ChangeEvent<HTMLInputElement>) => {
         const file = (e.target as HTMLInputElement)?.files?.[0]
@@ -238,41 +312,73 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         fileReader.readAsText(file)
     }, [t, setExportSource, setLocalConversations])
 
-    useEffect(() => {
-        const off = requestQueue.on('progress', (progress) => {
-            setProcessing(true)
-            setProgress(progress)
+    // Start fetching one batch of conversations
+    const startApiBatch = useCallback((chunk: ApiConversationItem[]) => {
+        requestQueue.clear()
+        chunk.forEach(({ id, title }) => {
+            requestQueue.add({
+                name: title,
+                request: () => fetchConversation(id, exportType !== 'JSON'),
+            })
         })
+        requestQueue.start()
+    }, [requestQueue, exportType])
 
+    useEffect(() => {
+        const off = requestQueue.on('progress', (prog) => {
+            setProcessing(true)
+            setProgress({
+                ...prog,
+                batchIndex: batchIndexRef.current,
+                totalBatches: totalBatchesRef.current,
+                // Accumulate global completed count across batches
+                completed: batchIndexRef.current * EXPORT_OPERATION_BATCH + prog.completed,
+                total: totalBatchesRef.current * EXPORT_OPERATION_BATCH,
+            })
+        })
         return () => off()
     }, [requestQueue])
 
     useEffect(() => {
-        const off = archiveQueue.on('progress', (progress) => {
+        const off = archiveQueue.on('progress', (prog) => {
             setProcessing(true)
-            setProgress(progress)
+            setProgress({ ...prog, batchIndex: 0, totalBatches: 0 })
         })
-
         return () => off()
     }, [archiveQueue])
 
     useEffect(() => {
-        const off = deleteQueue.on('progress', (progress) => {
+        const off = deleteQueue.on('progress', (prog) => {
             setProcessing(true)
-            setProgress(progress)
+            setProgress({ ...prog, batchIndex: 0, totalBatches: 0 })
         })
-
         return () => off()
     }, [deleteQueue])
 
+    // Wave-based done handler: download the finished batch then kick off the next one
     useEffect(() => {
-        const off = requestQueue.on('done', (results) => {
-            setProcessing(false)
+        const off = requestQueue.on('done', async (results) => {
+            const batchIdx = batchIndexRef.current
+            const totalBatches = totalBatchesRef.current
+            const partIndex = batchIdx + 1
             const callback = exportAllOptions.find(o => o.label === exportType)?.callback
-            if (callback) callback(format, results, metaList, selectedProject?.display.name)
+            if (callback) {
+                await callback(format, results, metaList, selectedProject?.display.name, partIndex, totalBatches)
+            }
+            if (partIndex < totalBatches) {
+                // Brief pause before the next wave to avoid back-to-back browser downloads
+                // and give the ChatGPT API a moment to breathe
+                await sleep(400)
+                batchIndexRef.current++
+                const nextChunk = pendingBatchesRef.current[batchIndexRef.current]
+                if (nextChunk) startApiBatch(nextChunk)
+            }
+            else {
+                setProcessing(false)
+            }
         })
         return () => off()
-    }, [requestQueue, exportAllOptions, exportType, format, metaList, selectedProject])
+    }, [requestQueue, exportAllOptions, exportType, format, metaList, selectedProject, startApiBatch])
 
     useEffect(() => {
         const off = archiveQueue.on('done', () => {
@@ -294,27 +400,38 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         return () => off()
     }, [deleteQueue, apiConversations, selected, t])
 
+    // Kick off wave export: split selected into 100-conversation batches and process the first
     const exportAllFromApi = useCallback(() => {
         if (disabled) return
-
-        requestQueue.clear()
-
-        selected.forEach(({ id, title }) => {
-            requestQueue.add({
-                name: title,
-                request: () => fetchConversation(id, exportType !== 'JSON'),
-            })
+        const chunks = chunkArray(selected, EXPORT_OPERATION_BATCH)
+        pendingBatchesRef.current = chunks
+        batchIndexRef.current = 0
+        totalBatchesRef.current = chunks.length
+        setProcessing(true)
+        setProgress({
+            total: selected.length,
+            completed: 0,
+            currentName: '',
+            currentStatus: 'processing',
+            batchIndex: 0,
+            totalBatches: chunks.length,
         })
+        startApiBatch(chunks[0])
+    }, [disabled, selected, startApiBatch])
 
-        requestQueue.start()
-    }, [disabled, selected, requestQueue, exportType])
-
-    const exportAllFromLocal = useCallback(() => {
+    // Local-source export: also batched in waves of 100, but no API fetch needed
+    const exportAllFromLocal = useCallback(async () => {
         if (disabled) return
-
         const results = localConversations.filter(c => selected.some(s => s.id === c.id))
         const callback = exportAllOptions.find(o => o.label === exportType)?.callback
-        if (callback) callback(format, results, metaList, selectedProject?.display.name)
+        if (!callback) return
+        const chunks = chunkArray(results, EXPORT_OPERATION_BATCH)
+        setProcessing(true)
+        for (let i = 0; i < chunks.length; i++) {
+            await callback(format, chunks[i], metaList, selectedProject?.display.name, i + 1, chunks.length)
+            if (i < chunks.length - 1) await sleep(400)
+        }
+        setProcessing(false)
     }, [
         disabled,
         selected,
@@ -389,6 +506,8 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
             .finally(() => setLoading(false))
     }, [selectedProject, exportAllLimit])
 
+    const totalBatches = Math.ceil(selected.length / EXPORT_OPERATION_BATCH) || 1
+
     return (
         <>
             <Dialog.Title className="DialogTitle">{t('Export Dialog Title')}</Dialog.Title>
@@ -413,6 +532,13 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 </div>
             )}
             <ProjectSelect projects={projects} selected={selectedProject} setSelected={setSelectedProject} disabled={processing} />
+            <DateFilter
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                setDateFrom={setDateFrom}
+                setDateTo={setDateTo}
+                disabled={processing}
+            />
             {selectedProject === undefined
                 ? (
                     <div className="SelectList flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
@@ -428,9 +554,17 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                         disabled={processing}
                         loading={loading}
                         error={error}
+                        dateFrom={dateFrom}
+                        dateTo={dateTo}
                     />
                     )}
-            <div className="flex mt-6" style={{ justifyContent: 'space-between' }}>
+            {selected.length > 0 && !processing && (
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                    {t('Export batch info')}
+                    {totalBatches > 1 && ` (${totalBatches} downloads)`}
+                </p>
+            )}
+            <div className="flex mt-3" style={{ justifyContent: 'space-between' }}>
                 <select className="Select" disabled={processing} value={exportType} onChange={e => setExportType(e.currentTarget.value)}>
                     {exportAllOptions.map(({ label }) => (
                         <option key={t(label)} value={label}>{label}</option>
@@ -451,10 +585,17 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 <>
                     <div className="mt-2 mb-1 justify-between flex">
                         <span className="truncate mr-8">{progress.currentName}</span>
-                        <span>{`${progress.completed}/${progress.total}`}</span>
+                        <span className="shrink-0 tabular-nums text-sm text-gray-500 dark:text-gray-400">
+                            {progress.totalBatches > 1
+                                ? `Batch ${progress.batchIndex + 1}/${progress.totalBatches} · ${progress.completed}/${progress.total}`
+                                : `${progress.completed}/${progress.total}`}
+                        </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700">
-                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${(progress.completed / progress.total) * 100}%` }} />
+                        <div
+                            className="bg-blue-600 h-2.5 rounded-full"
+                            style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
+                        />
                     </div>
                 </>
             )}
