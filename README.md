@@ -40,7 +40,7 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
 [Install-1-image]: https://img.shields.io/badge/-Install-blue
 [Install-1-url]: https://greasyfork.org/scripts/456055-chatgpt-exporter
 [Install-2-image]: https://img.shields.io/badge/-Install-blue
-[Install-2-url]: https://raw.githubusercontent.com/pionxzh/chatgpt-exporter/master/dist/chatgpt.user.js
+[Install-2-url]: https://raw.githubusercontent.com/cjam28/chatgpt-exporter/master/dist/chatgpt.user.js
 
 #
 
